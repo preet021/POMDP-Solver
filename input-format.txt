@@ -1,0 +1,28 @@
+* WHAT IS POMDP?
+
+	POMDP is a seven tuple: (S, A, T, R, O, _||_, d).
+	S: set of states
+	A: set of actions
+	T: transition function...gives Pr(s'| a, s)
+	R: reward function...gives R(s, a)
+	O: set of observations
+	_||_: gives Pr(o | a, s')
+	d: discount factor
+
+
+* INPUT FORMAT:
+
+	1. discount: %f
+	2. states: <space seperated list of states>
+	3. actions: <space seperated list of actions>
+	4. observations: <space seperated list of observations>
+	5. T : <action> : <startState> : <end-state> %f
+	6. O : <action> : <end-state> : <observation> %f
+	7. R : <action> : <start-state> %f
+	8. start: <space seperated |S| values denoting the belief value of each state initially>
+	9. Wildcard interpretation is implemented.
+	10. Lines starting with # will be treated as comments
+
+* MEMORY REQUIREMENTS
+
+	1. O(|S||S||A| + |O||A||S|) for storing the POMDP + run-time requirements.

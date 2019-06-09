@@ -1,0 +1,44 @@
+# This is the tiger problem of AAAI paper. This format is still
+# experimental and subject to change.
+
+discount: 0.95
+values: reward
+states: tiger-left tiger-right 
+actions: open-left listen open-right
+observations: obs-left obs-right
+
+T : listen : tiger-left : tiger-left 1
+T : listen : tiger-left : tiger-right 0
+T : listen : tiger-right : tiger-left 0
+T : listen : tiger-right : tiger-right 1
+
+T :open-left : tiger-left : tiger-left 0.5
+T :open-left : tiger-left : tiger-right 0.5
+T :open-left : tiger-right : tiger-left 0.5
+T :open-left : tiger-right : tiger-right 0.5
+
+T : open-right : tiger-left : tiger-left 0.5
+T : open-right : tiger-left : tiger-right 0.5
+T : open-right : tiger-right : tiger-left 0.5
+T : open-right : tiger-right : tiger-right 0.5
+
+O : listen : tiger-left : obs-left 0.85
+O : listen : tiger-left : obs-right 0.15
+O : listen : tiger-right : obs-left 0.15
+O : listen : tiger-right : obs-right 0.85
+
+O : open-left : tiger-left : obs-left 0.5
+O : open-left : tiger-left : obs-right 0.5
+O : open-left : tiger-right : obs-left 0.5
+O : open-left : tiger-right : obs-right 0.5
+
+O : open-right : tiger-left : obs-left 0.5
+O : open-right : tiger-left : obs-right 0.5
+O : open-right : tiger-right : obs-left 0.5
+O : open-right : tiger-right : obs-right 0.5
+
+R:listen : * : * : * -1
+R:open-left : tiger-left : * : * -100
+R:open-left : tiger-right : * : * 10
+R:open-right : tiger-left : * : * 10 
+R:open-right : tiger-right : * : * -100
