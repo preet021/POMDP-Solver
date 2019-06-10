@@ -10,7 +10,7 @@
 	d: discount factor
 
 
-* INPUT FORMAT:
+* INPUT FORMAT
 
 	1. discount: %f
 	2. states: <space seperated list of states>
@@ -20,6 +20,7 @@
 	6. O : <action> : <end-state> : <observation> %f
 	7. R : <action> : <start-state> %f
 	8. start: <space seperated |S| values denoting the belief value of each state initially>
+	Note: the above 8 parameters can be in any order.
 	9. Wildcard interpretation is implemented.
 	10. Lines starting with # will be treated as comments
 
