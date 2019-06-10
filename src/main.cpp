@@ -56,7 +56,9 @@ int main (int argc, char* argv[]) {
 	bool has_discount, has_states, has_actions, has_observations, has_start;
 	double discount;
 	int num_of_states = 0, num_of_actions = 0, num_of_observations = 0;
+	map <string, int> state_map, action_map, obs_map;
 	char *s, *t;
+	string str;
 	queue <char*> Q;
 	while ((read = getline(&line, &len, fp)) != -1) {
 		line = trim(line, (int)read);
@@ -77,8 +79,11 @@ int main (int argc, char* argv[]) {
 				}
 			t = strtok(s, " \n\t\v\f\r");
 			while (t != NULL) {
+				str = "";
+				for (int i=0; t[i]; ++i)
+					str += t[i];
+				state_map[str] = num_of_states;
 				++num_of_states;
-				printf("%s\n", t);
 				t = strtok(NULL, " \n\t\v\f\r");
 			}
 		}
@@ -91,8 +96,11 @@ int main (int argc, char* argv[]) {
 				}
 			t = strtok(s, " \n\t\v\f\r");
 			while (t != NULL) {
+				str = "";
+				for (int i=0; t[i]; ++i)
+					str += t[i];
+				action_map[str] = num_of_actions;
 				++num_of_actions;
-				printf("%s\n", t);
 				t = strtok(NULL, " \n\t\v\f\r");
 			}
 		}
@@ -105,8 +113,11 @@ int main (int argc, char* argv[]) {
 				}
 			t = strtok(s, " \n\t\v\f\r");
 			while (t != NULL) {
+				str = "";
+				for (int i=0; t[i]; ++i)
+					str += t[i];
+				obs_map[str] = num_of_observations;
 				++num_of_observations;
-				printf("%s\n", t);
 				t = strtok(NULL, " \n\t\v\f\r");
 			}
 		}
