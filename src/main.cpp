@@ -1,3 +1,4 @@
+#include "witness.h"
 #include <stdio.h>
 #include <iostream>
 #include <fstream>
@@ -12,8 +13,7 @@
 
 using namespace std;
 
-char *trim (char *s, int len) {
-	// cout << "aya" << endl;
+char* trim (char *s, int len) {
 	int i = 0;
 	for (; i<len && isspace(s[i]); ++i);
 	int j = len - 1;
@@ -57,9 +57,12 @@ int main (int argc, char* argv[]) {
 	double discount;
 	int num_of_states = 0, num_of_actions = 0, num_of_observations = 0;
 	map <string, int> state_map, action_map, obs_map;
+	re rew; te trns; oe obs;
 	char *s, *t;
 	string str;
-	queue <char*> Q;
+	queue <re> Q_R;
+	queue <te> Q_T;
+	queue <oe> Q_O;
 	while ((read = getline(&line, &len, fp)) != -1) {
 		line = trim(line, (int)read);
 		if (!strncmp("discount", line, 8)) {
@@ -124,10 +127,98 @@ int main (int argc, char* argv[]) {
 		else if (!strncmp("start", line, 5)) {
 			has_start = true;
 		}
-		else if ((!strncmp("R", line, 1)) or (!strncmp("T", line, 1)) or (!strncmp("O", line, 1))) {
-			char* p = new char[(int)strlen(line)];
-			strcpy(p, (const char*)line);
-			Q.push(p);
+		else if (!strncmp("R", line, 1)) {
+			t = strtok(line+1, ": \n\t\v\r\f");
+			int it = 0;
+			while (t != NULL) {
+				str = "";
+				for (int i=0; t[i]; ++i)
+					str += t[i];
+				if (it == 0) {
+					if (str == "*")
+						rew.action = -1;
+					else
+						rew.action = action_map[str];
+				}
+				else if (it == 1) {
+					if (str == "*")
+						rew.state = -1;
+					else
+						rew.state = state_map[str];
+				}
+				else if (it == 4) {
+					sscanf(t, "%lf", &rew.value);
+				}
+				it++;
+				t = strtok(NULL, ": \n\t\v\f\r");
+			}
+			Q_R.push(rew);
+		}
+		else if (!strncmp("T", line, 1)) {
+			t = strtok(line+1, ": \n\t\v\r\f");
+			int it = 0;
+			while (t != NULL) {
+				str = "";
+				for (int i=0; t[i]; ++i)
+					str += t[i];
+				if (it == 0) {
+					if (str == "*")
+						trns.action = -1;
+					else
+						trns.action = action_map[str];
+				}
+				else if (it == 1) {
+					if (str == "*")
+						trns.start_state = -1;
+					else
+						trns.start_state = state_map[str];
+				}
+				else if (it == 2) {
+					if (str == "*")
+						trns.end_state = -1;
+					else
+						trns.end_state = state_map[str];
+				}
+				else if (it == 3) {
+					sscanf(t, "%lf", &trns.value);
+				}
+				it++;
+				t = strtok(NULL, ": \n\t\v\f\r");
+			}
+			Q_T.push(trns);
+		}
+		else if (!strncmp("O", line, 1)) {
+			t = strtok(line+1, ": \n\t\v\r\f");
+			int it = 0;
+			while (t != NULL) {
+				str = "";
+				for (int i=0; t[i]; ++i)
+					str += t[i];
+				if (it == 0) {
+					if (str == "*")
+						obs.action = -1;
+					else
+						obs.action = action_map[str];
+				}
+				else if (it == 2) {
+					if (str == "*")
+						obs.obs = -1;
+					else
+						obs.obs = obs_map[str];
+				}
+				else if (it == 1) {
+					if (str == "*")
+						obs.end_state = -1;
+					else
+						obs.end_state = state_map[str];
+				}
+				else if (it == 3) {
+					sscanf(t, "%lf", &obs.value);
+				}
+				it++;
+				t = strtok(NULL, ": \n\t\v\f\r");
+			}
+			Q_O.push(obs);
 		}
 	}
     if (!has_discount) {
@@ -150,5 +241,108 @@ int main (int argc, char* argv[]) {
     	fprintf(stderr, "ERROR: set of observations missing in input file %s\n", argv[1]);
     	exit(EXIT_FAILURE);
     }
+    
+    // Storing the Reward function   R(s, a)
+    double **R = new double*[num_of_states];
+    while (!Q_R.empty()) {
+    	re tp = Q_R.front();
+    	Q_R.pop();
+    	if (tp.action == -1) {
+    		for (int i=0; i<num_of_actions; ++i) {
+    			rew = tp;
+    			rew.action = i;
+    			Q_R.push(rew);
+    		}
+    	}
+    	else if (tp.state == -1) {
+    		for (int i=0; i<num_of_states; ++i) {
+    			rew = tp;
+    			rew.state = i;
+    			Q_R.push(rew);
+    		}
+    	}
+    	else {
+    		if (R[tp.state] == NULL) {
+    			R[tp.state] = new double[num_of_actions];
+    			memset(R[tp.state], 0, sizeof(R[tp.state]));
+    		}
+    		R[tp.state][tp.action] += tp.value;
+    	}
+    }
+
+    // Storing the Transition function   T(s, a, s')
+    double ***T = new double**[num_of_states];
+    for (int i=0; i<num_of_states; ++i)
+    	T[i] = new double*[num_of_actions];
+    while (!Q_T.empty()) {
+    	te tp = Q_T.front();
+    	Q_T.pop();
+    	if (tp.action == -1) {
+    		for (int i=0; i<num_of_actions; ++i) {
+    			trns = tp;
+    			trns.action = i;
+    			Q_T.push(trns);
+    		}
+    	}
+    	else if (tp.start_state == -1) {
+    		for (int i=0; i<num_of_states; ++i) {
+    			trns = tp;
+    			trns.start_state = i;
+    			Q_T.push(trns);
+    		}
+    	}
+    	else if (tp.end_state == -1) {
+    		for (int i=0; i<num_of_states; ++i) {
+    			trns = tp;
+    			trns.end_state = i;
+    			Q_T.push(trns);
+    		}
+    	}
+    	else {
+    		if (T[tp.start_state][tp.action] == NULL) {
+    			T[tp.start_state][tp.action] = new double[num_of_states];
+    			memset(T[tp.start_state][tp.action], 0, sizeof(T[tp.start_state][tp.action]));
+    		}
+    		T[tp.start_state][tp.action][tp.end_state] += tp.value;
+    	}
+    }
+
+    // Storing the Observation function   O(a, s', o)
+    double ***O = new double**[num_of_actions];
+    for (int i=0; i<num_of_actions; ++i)
+    	O[i] = new double*[num_of_states];
+    while (!Q_O.empty()) {
+    	oe tp = Q_O.front();
+    	Q_O.pop();
+    	if (tp.action == -1) {
+    		for (int i=0; i<num_of_actions; ++i) {
+    			obs = tp;
+    			obs.action = i;
+    			Q_O.push(obs);
+    		}
+    	}
+    	else if (tp.obs == -1) {
+    		for (int i=0; i<num_of_observations; ++i) {
+    			obs = tp;
+    			obs.obs = i;
+    			Q_O.push(obs);
+    		}
+    	}
+    	else if (tp.end_state == -1) {
+    		for (int i=0; i<num_of_states; ++i) {
+    			obs = tp;
+    			obs.end_state = i;
+    			Q_O.push(obs);
+    		}
+    	}
+    	else {
+    		if (O[tp.action][tp.end_state] == NULL) {
+    			O[tp.action][tp.end_state] = new double[num_of_observations];
+    			memset(O[tp.action][tp.end_state], 0, sizeof(O[tp.action][tp.end_state]));
+    		}
+    		O[tp.action][tp.end_state][tp.obs] += tp.value;
+		}
+	}
+
 	exit(EXIT_SUCCESS);
 }

@@ -35,10 +35,11 @@ O : open-left : tiger-right : obs-right 0.5
 O : open-right : tiger-left : obs-left 0.5
 O : open-right : tiger-left : obs-right 0.5
 O : open-right : tiger-right : obs-left 0.5
-O : open-right : tiger-right : obs-right 0.5
+O : open-right : tiger-right : obs-right 0.5		   				
 
 R:listen : * : * : * -1
 R:open-left : tiger-left : * : * -100
-R:open-left : tiger-right : * : * 10
-R:open-right : tiger-left : * : * 10 
+R:open-left : tiger-right : * : * 10		
+R:open-right : tiger-left : * : * 10
 R:open-right : tiger-right : * : * -100
+			

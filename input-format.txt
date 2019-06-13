@@ -19,7 +19,7 @@
 	5. T : <action> : <startState> : <end-state> %f
 	6. O : <action> : <end-state> : <observation> %f
 	7. R : <action> : <start-state> %f
-	8. start: <space seperated |S| values denoting the belief value of each state initially>
+	8. start: <space seperated |S| values denoting the belief value of each state initially>. If no start state is provided then agent can be in any state with equal probability.
 	Note: the above 8 parameters can be in any order.
 	9. Wildcard interpretation is implemented.
 	10. Lines starting with # will be treated as comments
