@@ -22,4 +22,16 @@
 		double value;
 	}oe;
 
+	typedef struct Belief_State {
+		vector <double> b;
+	}bstate;
+
+	typedef struct Policy_Tree {
+		int action;
+		vector <double> value;
+		// inline bool operator > (const Policy_Tree& p) const {
+		// 	return value[0] > p.value[0];
+		// }
+	}ptree;
+
 #endif
