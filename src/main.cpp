@@ -2,11 +2,10 @@
 #include <iostream>
 #include <fstream>
 #include <stdlib.h>
-#include <assert.h>
 #include <sys/types.h>
+#include <assert.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <ctype.h>
 #include <string.h>
 #include <vector>
 #include <queue>
@@ -19,98 +18,34 @@ using namespace std;
 
 const double INF = 1e18;
 const int TIME_HORIZON = 100;
-bool has_discount, has_states, has_actions, has_observations, has_start;
+bool has_discount = false, has_states = false, has_actions = false, has_observations = false, has_start = false;
 double **R, ***T, ***O;
 double discount;
 int num_of_states = 0, num_of_actions = 0, num_of_observations = 0, time_horizon = 0;
 map <string, int> state_map, action_map, obs_map;
-re rew;
-te trns;
-oe obs;
-char *s, *t;
-string str;
-vector <ptree> V[TIME_HORIZON];
+vector <ptree> V[TIME_HORIZON]; // Value Function
 queue <re> Q_R;
 queue <te> Q_T;
 queue <oe> Q_O;
+oe obs; te trns; re rew;
 bstate cur_b;
+
+// Function declarations
+void store_reward_func();
+void store_transition_func();
+void store_obs_func();
+vector <double>& back(vector <double>& alpha, int a, int o, vector<double>& _alpha);
+ptree best(bstate& b, vector<ptree>& X);
 ptree choice (ptree p, int o, int a);
-
-double dot_product(vector<double>& a, vector<double>& b) {
-	assert(sz(a) == sz(b));
-	double result = 0;
-	for (int i=0; i<sz(a); ++i)
-		result += a[i] * b[i];
-	return result;
-}
-
-ptree best(bstate& b, vector<ptree>& X) {
-	ptree bestpol;
-	bestpol.value.assign(num_of_states, -INF);
-	double bestval = -INF, val;
-	for (int pol=0; pol<sz(X); pol++) {
-		val = dot_product(b.b, X[pol].value);
-		if ((val > bestval) or ((val == bestval) /*and (X[pol] > bestpol)*/)) {
-			bestval = val;
-			bestpol = X[pol];
-		}
-	}
-	return bestpol;
-}
-
-vector <double>& back(vector <double>& alpha, int a, int o, vector<double>& _alpha) {
-	_alpha.clear();
-	_alpha.assign(num_of_states, 0);
-	for (int s=0; s<num_of_states; ++s)
-		for (int _s=0; _s<num_of_states; _s++)
-			_alpha[s] += alpha[_s] * T[s][a][_s] * O[_s][a][o];
-	return _alpha;
-}
-
-vector <double>& value(ptree& p) {
-	if (!sz(p.value)) {
-		vector <double> _alpha;
-		p.value.assign(num_of_states, 0);
-		int a = p.action;
-		for (int s=0; s<num_of_states; ++s) {
-			p.value[s] = R[s][a];
-			for (int o=0; o<num_of_observations; ++o) {
-				ptree ret = choice(p, o, a);
-				p.value[s] += discount * back(ret.value, a, o, _alpha)[s];
-			}
-		}
-	}
-	return p.value;
-}
-
-ptree choice(ptree p, int o, int a) {
-	vector <ptree> S;
-	ptree temp;
-	vector <double> _alpha;
-	for (int i=0; i<sz(V[time_horizon-1]); ++i) {
-		temp.value = back(V[time_horizon-1][i].value, a, o, _alpha);
-		S.push_back(temp);
-	}
-	return best(cur_b, S);
-}
-
-char* trim(char *s, int len) {
-	int i = 0;
-	for (; i<len && isspace(s[i]); ++i);
-	int j = len - 1;
-	for (; j>i && isspace(s[j]); j--);
-	for (int k=i; k<=j; ++k) s[k-i] = s[k];
-	s[j-i+1] = '\0';
-	return s;
-}
+vector <double>& value(ptree& p);
 
 int main(int argc, char* argv[]) {
-	
+
 	// argv[1] should be the path to input file
 
 	// Checking whether input file is provided
 	if (argc != 2) {
-		fprintf(stderr, "Usage:\n./binary path_to_input_file%s\n", argv[1]);
+		fprintf(stderr, "Usage:\n./binary <path_to_input_file>\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -134,6 +69,10 @@ int main(int argc, char* argv[]) {
 	}
 
 	// Reading file line by line and storing the POMDP variables
+	char *s, *t;
+	int it;
+	double sm;
+	string str;
 	while ((read = getline(&line, &len, fp)) != -1) {
 		line = trim(line, (int)read);
 		if (!strncmp("discount", line, 8)) {
@@ -197,10 +136,22 @@ int main(int argc, char* argv[]) {
 		}
 		else if (!strncmp("start", line, 5)) {
 			has_start = true;
+			cur_b.b.assign(num_of_states, 0);
+			t = strtok(line+5, ": \n\t\v\r\f");
+			it = 0;
+			while (t != NULL) {
+				sscanf(t, "%lf", &cur_b.b[it]);
+				++it;
+				t = strtok(NULL, ": \n\t\v\r\f");
+			}
+			sm = 1;
+			for (int i=0; i<num_of_states; ++i)
+				sm -= cur_b.b[i];
+			assert(sm <= 1e-6);
 		}
 		else if (!strncmp("R", line, 1)) {
 			t = strtok(line+1, ": \n\t\v\r\f");
-			int it = 0;
+			it = 0;
 			while (t != NULL) {
 				str = "";
 				for (int i=0; t[i]; ++i)
@@ -301,8 +252,8 @@ int main(int argc, char* argv[]) {
     	exit(EXIT_FAILURE);
     }
     else if (!has_start) {
-    	fprintf(stderr, "ERROR: initial belief state missing in input file %s\n", argv[1]);
-    	// exit(EXIT_FAILURE);
+    	// agent can be in any state with equal probability
+    	cur_b.b.assign(num_of_states, (double)1 / num_of_states);
     }
     else if (!has_actions) {
     	fprintf(stderr, "ERROR: set of actions missing in input file %s\n", argv[1]);
@@ -312,11 +263,38 @@ int main(int argc, char* argv[]) {
     	fprintf(stderr, "ERROR: set of observations missing in input file %s\n", argv[1]);
     	exit(EXIT_FAILURE);
     }
+
+    // Clearing the state, action and obs enumeration
+    state_map.clear();
+    action_map.clear();
+    obs_map.clear();
     
     // Storing the Reward function   R(s, a)
+    store_reward_func();
+
+    // Storing the Transition function   T(s, a, s')
+    store_transition_func();
+
+    // Storing the Observation function   O(a, s', o)
+    store_obs_func();
+
+	cout << "Number of States: " << num_of_states << '\n';
+	cout << "Number of Actions: " << num_of_actions << '\n';
+	cout << "Number of Observations: " << num_of_observations << '\n';
+	cout << "Discount Factor: " << discount << '\n';
+	cout << "Initial Belief State: ";
+	for (int i=0; i<num_of_states; ++i)
+		cout << cur_b.b[i] << " ";
+	cout << '\n';
+
+	exit(EXIT_SUCCESS);
+}
+
+void store_reward_func() {
 	R = new double*[num_of_states];
+    re tp, rew;
     while (!Q_R.empty()) {
-    	re tp = Q_R.front();
+    	tp = Q_R.front();
     	Q_R.pop();
     	if (tp.action == -1) {
     		for (int i=0; i<num_of_actions; ++i) {
@@ -340,13 +318,15 @@ int main(int argc, char* argv[]) {
     		R[tp.state][tp.action] += tp.value;
     	}
     }
+}
 
-    // Storing the Transition function   T(s, a, s')
+void store_transition_func() {
 	T = new double**[num_of_states];
     for (int i=0; i<num_of_states; ++i)
     	T[i] = new double*[num_of_actions];
+    te tp, trns;
     while (!Q_T.empty()) {
-    	te tp = Q_T.front();
+    	tp = Q_T.front();
     	Q_T.pop();
     	if (tp.action == -1) {
     		for (int i=0; i<num_of_actions; ++i) {
@@ -377,13 +357,15 @@ int main(int argc, char* argv[]) {
     		T[tp.start_state][tp.action][tp.end_state] += tp.value;
     	}
     }
+}
 
-    // Storing the Observation function   O(a, s', o)
+void store_obs_func() {
 	O = new double**[num_of_actions];
     for (int i=0; i<num_of_actions; ++i)
     	O[i] = new double*[num_of_states];
+    oe tp, obs;
     while (!Q_O.empty()) {
-    	oe tp = Q_O.front();
+    	tp = Q_O.front();
     	Q_O.pop();
     	if (tp.action == -1) {
     		for (int i=0; i<num_of_actions; ++i) {
@@ -414,6 +396,54 @@ int main(int argc, char* argv[]) {
     		O[tp.action][tp.end_state][tp.obs] += tp.value;
 		}
 	}
+}
 
-	exit(EXIT_SUCCESS);
+vector <double>& back(vector <double>& alpha, int a, int o, vector<double>& _alpha) {
+	_alpha.clear();
+	_alpha.assign(num_of_states, 0);
+	for (int s=0; s<num_of_states; ++s)
+		for (int _s=0; _s<num_of_states; _s++)
+			_alpha[s] += alpha[_s] * T[s][a][_s] * O[_s][a][o];
+	return _alpha;
+}
+
+ptree best(bstate& b, vector<ptree>& X) {
+	ptree bestpol;
+	bestpol.value.assign(num_of_states, -INF);
+	double bestval = -INF, val;
+	for (int pol=0; pol<sz(X); pol++) {
+		val = dot_product(b.b, X[pol].value);
+		if ((val > bestval) or ((val == bestval) /*and (X[pol] > bestpol)*/)) {
+			bestval = val;
+			bestpol = X[pol];
+		}
+	}
+	return bestpol;
+}
+
+ptree choice(ptree p, int o, int a) {
+	std::vector <ptree> S;
+	ptree temp;
+	std::vector <double> _alpha;
+	for (int i=0; i<sz(V[time_horizon-1]); ++i) {
+		temp.value = back(V[time_horizon-1][i].value, a, o, _alpha);
+		S.push_back(temp);
+	}
+	return best(cur_b, S);
+}
+
+vector <double>& value(ptree& p) {
+	if (!sz(p.value)) {
+		vector <double> _alpha;
+		p.value.assign(num_of_states, 0);
+		int a = p.action;
+		for (int s=0; s<num_of_states; ++s) {
+			p.value[s] = R[s][a];
+			for (int o=0; o<num_of_observations; ++o) {
+				ptree ret = choice(p, o, a);
+				p.value[s] += discount * back(ret.value, a, o, _alpha)[s];
+			}
+		}
+	}
+	return p.value;
 }

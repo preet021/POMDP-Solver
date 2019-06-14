@@ -1,7 +1,7 @@
 #ifndef WITNESS_POMDP
 	
 	#define WITNESS_POMDP
-	
+	using namespace std;
 	typedef struct Reward_Entry {
 		int action;
 		int state;
@@ -33,5 +33,8 @@
 		// 	return value[0] > p.value[0];
 		// }
 	}ptree;
+
+	char* trim(char *s, int len);
+	double dot_product(vector<double>& a, vector<double>& b);
 
 #endif
