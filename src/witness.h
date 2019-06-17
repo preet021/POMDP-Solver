@@ -29,9 +29,11 @@
 	typedef struct Policy_Tree {
 		int action;
 		vector <double> value;
-		// inline bool operator > (const Policy_Tree& p) const {
-		// 	return value[0] > p.value[0];
-		// }
+		map <int,int> has_choice;
+		map <int,struct Policy_Tree> choice;
+		inline bool operator > (const Policy_Tree& p) const {
+			return value[0] > p.value[0];
+		}
 	}ptree;
 
 	char* trim(char *s, int len);

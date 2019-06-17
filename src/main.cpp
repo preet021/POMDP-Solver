@@ -31,12 +31,16 @@ oe obs; te trns; re rew;
 bstate cur_b;
 
 // Function declarations
+void solvePOMDP(double epsilon);
 void store_reward_func();
 void store_transition_func();
 void store_obs_func();
+double difference(vector <ptree>& a, vector <ptree>& b);
+double weakbound(vector <ptree>& X, vector <ptree>& Y);
+ptree besttree(bstate& b, int a, vector<ptree>& X);
 vector <double>& back(vector <double>& alpha, int a, int o, vector<double>& _alpha);
 ptree best(bstate& b, vector<ptree>& X);
-ptree choice (ptree p, int o, int a);
+ptree& choice (ptree& p, int o);
 vector <double>& value(ptree& p);
 
 int main(int argc, char* argv[]) {
@@ -287,6 +291,9 @@ int main(int argc, char* argv[]) {
 		cout << cur_b.b[i] << " ";
 	cout << '\n';
 
+	double epsilon = 1e-3;
+	// solvePOMDP(epsilon);
+
 	exit(EXIT_SUCCESS);
 }
 
@@ -407,29 +414,20 @@ vector <double>& back(vector <double>& alpha, int a, int o, vector<double>& _alp
 	return _alpha;
 }
 
-ptree best(bstate& b, vector<ptree>& X) {
-	ptree bestpol;
-	bestpol.value.assign(num_of_states, -INF);
-	double bestval = -INF, val;
-	for (int pol=0; pol<sz(X); pol++) {
-		val = dot_product(b.b, X[pol].value);
-		if ((val > bestval) or ((val == bestval) /*and (X[pol] > bestpol)*/)) {
-			bestval = val;
-			bestpol = X[pol];
+ptree& choice(ptree& p, int o) {
+	if (p.has_choice[o] == 0) {
+		int a = p.action;
+		std::vector <ptree> S;
+		ptree temp;
+		std::vector <double> _alpha;
+		for (int i=0; i<sz(V[time_horizon-1]); ++i) {
+			temp.value = back(V[time_horizon-1][i].value, a, o, _alpha);
+			S.push_back(temp);
 		}
+		p.has_choice[o] = 1;
+		p.choice[o] = best(cur_b, S);
 	}
-	return bestpol;
-}
-
-ptree choice(ptree p, int o, int a) {
-	std::vector <ptree> S;
-	ptree temp;
-	std::vector <double> _alpha;
-	for (int i=0; i<sz(V[time_horizon-1]); ++i) {
-		temp.value = back(V[time_horizon-1][i].value, a, o, _alpha);
-		S.push_back(temp);
-	}
-	return best(cur_b, S);
+	return p.choice[o];
 }
 
 vector <double>& value(ptree& p) {
@@ -440,10 +438,74 @@ vector <double>& value(ptree& p) {
 		for (int s=0; s<num_of_states; ++s) {
 			p.value[s] = R[s][a];
 			for (int o=0; o<num_of_observations; ++o) {
-				ptree ret = choice(p, o, a);
+				ptree ret = choice(p, o);
 				p.value[s] += discount * back(ret.value, a, o, _alpha)[s];
 			}
 		}
 	}
 	return p.value;
 }
+
+ptree best(bstate& b, vector<ptree>& X) {
+	ptree bestpol;
+	bestpol.value.assign(num_of_states, -INF);
+	double bestval = -INF, val;
+	for (int pol=0; pol<sz(X); pol++) {
+		val = dot_product(b.b, X[pol].value);
+		if ((val > bestval) or ((val == bestval) and (X[pol] > bestpol))) {
+			bestval = val;
+			bestpol = X[pol];
+		}
+	}
+	return bestpol;
+}
+
+ptree besttree(bstate& b, int a, vector<ptree>& X) {
+	ptree p, pol;
+	p.action = a;
+	vector <double> _vec;
+	for (int o=0; o<num_of_observations; ++o) {
+		ptree bestpol;
+		bestpol.value.assign(num_of_states, -INF);
+		double bestval = -INF, val;
+		for (int i=0; i<sz(X); ++i) {
+			_vec = back(value(X[i]), a, o, _vec);
+			val = dot_product(b.b, _vec);
+			pol.value = _vec;
+			if ((val > bestval) or ((val == bestval) and (pol > bestpol))) {
+				bestval = val;
+				bestpol = pol;
+			}
+		}
+		p.choice[o] = bestpol;		
+	}
+}
+
+double weakbound(vector <ptree>& X, vector <ptree>& Y) {
+	double delta = -INF;
+	for (int i=0; i<sz(X); ++i) {
+		double mindiff = INF;
+		for (int j=0; j<sz(Y); ++j) {
+			double maxcomponent = -INF;
+			for (int s=0; s<num_of_states; ++s) {
+				maxcomponent = max(maxcomponent, value(X[i])[s] - value(Y[j])[s]);
+			}
+			mindiff = min(mindiff, maxcomponent);
+		}
+		delta = max(delta, mindiff);
+	}
+	return delta;
+}
+
+double difference(vector <ptree>& a, vector <ptree>& b) {
+	return max(weakbound(a, b), weakbound(b, a));
+}
+
+// void solvePOMDP(double epsilon) {
+// 	time_horizon = 1;
+// 	do {
+// 		for (int a=0; a<num_of_actions; ++a) {
+
+// 		}
+// 	} while (!(difference(V[time_horizon-1], V[time_horizon]) <= epsilon));
+// }
