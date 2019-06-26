@@ -6,7 +6,7 @@ values: reward
 states: tiger-left tiger-right
 actions: open-left listen open-right
 observations: obs-left obs-right
-start: 0.3 0.69
+start: 0.3 0.7
 
 T : listen : tiger-left : tiger-left 1
 T : listen : tiger-left : tiger-right 0

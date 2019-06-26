@@ -10,6 +10,7 @@
 #include <vector>
 #include <queue>
 #include <map>
+#include <set>
 
 #define sz(a) (int)(a).size()
 
@@ -39,7 +40,7 @@ double weakbound(vector <ptree>& X, vector <ptree>& Y);
 ptree besttree(bstate& b, int a, vector<ptree>& X);
 void solvePOMDP(double epsilon);
 void witness(int t, int a);
-void purge(int t, vector<ptree>& X);
+void prune(int t, vector<ptree>& X);
 bool findb(int a, int t, vector<ptree>& Q, bstate& b);
 void back(vector <double>& alpha, int a, int o, vector<double>& _alpha);
 ptree best(bstate& b, vector<ptree>& X);
@@ -508,8 +509,52 @@ bool findb(int a, int t, vector<ptree>& Q, bstate& b) {
 
 }
 
-void purge(int t, vector<ptree>& X) {
+void prune(int t, vector<ptree>& X) {
+	set <ptree> sX;
+	for (int i=0; i<sz(X); ++i)
+		sX.insert(X[i]);
+	double delta;
+	FILE *f;
+	for (int i=0; i<sz(X); ++i) {
 
+		// Opening the input file to LP solver
+		f = fopen("model.lp", "w");
+
+		// Maximixwe the objective function
+		fprintf(f, "max: 1 x0;\n\n");
+
+		// Constraint that all b[s] >= 0
+		for (int i=1; i<=num_of_states; ++i)
+			fprintf(f, "x%d >= 0;\n", i);
+
+		// Constraint that sum{b[s]} = 1
+		fprintf(f, "x1", );
+		for (int i=2; i<=num_of_states; ++i)
+			fprintf(f, " + x%d", i);
+		fprintf(f, " = 1;\n", );
+
+		// Constraint b.p >= delta + b.p' for all p' in X
+		for (int j=0; j<sz(X); ++j) {
+			if (sX.find(X[j]) == sX.end()) continue;
+			fprintf(f, "%f x1\n", X[i].value[1-1] - X[j].value[1-1]);
+			for (int s=2; s<=num_of_states; ++s)
+				fprintf(f, " + %f x%d", X[i].value[s-1] - X[j].value[s-1], s);
+			fprintf(f, " - x0 >= 0;\n");
+		}
+
+		// Closing the file
+		fclose(f);
+
+		// Calling the solver
+		system("lp_solve -S3 model.lp > out.lp");
+
+		// getting the output of LP solver
+		
+
+		if (delta > 0)
+			V[t].pb(X[i]);
+		else sX.erase(X[i]);
+	}
 }
 
 void witness(int t, int a, vector<ptree>& Q) {
@@ -537,7 +582,7 @@ void solvePOMDP(double epsilon) {
 			witness(time_horizon, a, Q);
 			X.insert(X.end(), Q.begin(), Q.end());
 		}
-		purge(time_horizon, X);
+		prune(time_horizon, X);
 		++time_horizon;
 	} while (!(difference(V[time_horizon-1], V[time_horizon]) <= epsilon));
 }
