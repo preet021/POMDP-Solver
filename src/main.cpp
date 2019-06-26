@@ -506,13 +506,14 @@ double difference(vector <ptree>& a, vector <ptree>& b) {
 }
 
 bool findb(int a, int t, vector<ptree>& Q, bstate& b) {
-
+	queue <ptree> agenda;
+	
 }
 
 void prune(int t, vector<ptree>& X) {
-	set <ptree> sX;
+	set <int> sX;
 	for (int i=0; i<sz(X); ++i)
-		sX.insert(X[i]);
+		sX.insert(i);
 	double delta;
 	FILE *f;
 	for (int i=0; i<sz(X); ++i) {
@@ -520,22 +521,22 @@ void prune(int t, vector<ptree>& X) {
 		// Opening the input file to LP solver
 		f = fopen("model.lp", "w");
 
-		// Maximixwe the objective function
+		// Maximize the objective function
 		fprintf(f, "max: 1 x0;\n\n");
 
 		// Constraint that all b[s] >= 0
-		for (int i=1; i<=num_of_states; ++i)
-			fprintf(f, "x%d >= 0;\n", i);
+		for (int s=1; s<=num_of_states; ++s)
+			fprintf(f, "x%d >= 0;\n", s);
 
 		// Constraint that sum{b[s]} = 1
-		fprintf(f, "x1", );
-		for (int i=2; i<=num_of_states; ++i)
-			fprintf(f, " + x%d", i);
-		fprintf(f, " = 1;\n", );
+		fprintf(f, "x1");
+		for (int s=2; s<=num_of_states; ++s)
+			fprintf(f, " + x%d", s);
+		fprintf(f, " = 1;\n");
 
 		// Constraint b.p >= delta + b.p' for all p' in X
 		for (int j=0; j<sz(X); ++j) {
-			if (sX.find(X[j]) == sX.end()) continue;
+			if (sX.find(j) == sX.end()) continue;
 			fprintf(f, "%f x1\n", X[i].value[1-1] - X[j].value[1-1]);
 			for (int s=2; s<=num_of_states; ++s)
 				fprintf(f, " + %f x%d", X[i].value[s-1] - X[j].value[s-1], s);
@@ -546,14 +547,28 @@ void prune(int t, vector<ptree>& X) {
 		fclose(f);
 
 		// Calling the solver
-		system("lp_solve -S3 model.lp > out.lp");
+		system("lp_solve model.lp > out.lp");
 
 		// getting the output of LP solver
-		
+		f = fopen("out.lp", "r");
+		int it;
+		char *line, *obj_value;
+		size_t len = 0;
+		ssize_t read = getline(&line, &len, f);
+		if ((read = getline(&line, &len, f)) != -1) {
+			line = trim(line, (int)read);
+			for (it=0; it; it++)
+				if (line[it] == ':')
+					break;
+			obj_value = line + it + 2;
+			sscanf(obj_value, "%lf", &delta);
+		}
+		fclose(f);
 
 		if (delta > 0)
-			V[t].pb(X[i]);
-		else sX.erase(X[i]);
+			V[t].push_back(X[i]);
+		else
+			sX.erase(i);
 	}
 }
 
