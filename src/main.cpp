@@ -506,7 +506,6 @@ double difference(vector <ptree>& a, vector <ptree>& b) {
 }
 
 bool findb(int a, int t, vector<ptree>& Q, bstate& b) {
-	queue <ptree> agenda;
 	
 }
 
