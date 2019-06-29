@@ -42,6 +42,7 @@ void solvePOMDP(double epsilon);
 void witness(int t, int a);
 void prune(int t, vector<ptree>& X);
 bool findb(int a, int t, vector<ptree>& Q, bstate& b);
+double check_pnew(vector<ptree>& Q, ptree& pnew, bstate& b);
 void back(vector <double>& alpha, int a, int o, vector<double>& _alpha);
 ptree best(bstate& b, vector<ptree>& X);
 ptree& choice (ptree& p, int o);
@@ -505,10 +506,6 @@ double difference(vector <ptree>& a, vector <ptree>& b) {
 	return max(weakbound(a, b), weakbound(b, a));
 }
 
-bool findb(int a, int t, vector<ptree>& Q, bstate& b) {
-	
-}
-
 void prune(int t, vector<ptree>& X) {
 	set <int> sX;
 	for (int i=0; i<sz(X); ++i)
@@ -569,6 +566,85 @@ void prune(int t, vector<ptree>& X) {
 		else
 			sX.erase(i);
 	}
+}
+
+double check_pnew(vector<ptree>& X, ptree& pnew, bstate& b) {
+
+	FILE *fp = fopen("model.lp", "w");
+	
+	fprintf(fp, "max: 1 x0;\n\n");
+
+	// Constraint that all b[s] >= 0
+	for (int s=1; s<=num_of_states; ++s)
+		fprintf(fp, "x%d >= 0;\n", s);
+
+	// Constraint that sum{b[s]} = 1
+	fprintf(fp, "x1");
+	for (int s=2; s<=num_of_states; ++s)
+		fprintf(fp, " + x%d", s);
+	fprintf(fp, " = 1;\n");
+
+	// Constraint b.pnew >= delta + b.p' for all p' in X
+	for (int j=0; j<sz(X); ++j) {
+		fprintf(fp, "%f x1\n", pnew.value[1-1] - X[j].value[1-1]);
+		for (int s=2; s<=num_of_states; ++s)
+			fprintf(fp, " + %f x%d", pnew.value[s-1] - X[j].value[s-1], s);
+		fprintf(fp, " - x0 >= 0;\n");
+	}
+
+	// Closing the file
+	fclose(fp);
+
+	// Calling the solver
+	system("lp_solve model.lp > out.lp");
+
+	// getting the output of LP solver
+	fp = fopen("out.lp", "r");
+	double ret;
+	char *line, *obj_value;
+	size_t len = 0;
+	int it;
+
+	// getting the value of objective function
+	ssize_t read = getline(&line, &len, fp);
+	if ((read = getline(&line, &len, fp)) != -1) {
+		line = trim(line, (int)read);
+		for (it=0; it; it++)
+			if (line[it] == ':')
+				break;
+		obj_value = line + it + 2;
+		sscanf(obj_value, "%lf", &ret);
+	}
+
+	// getting the value of 'b'
+	read = getline(&line, &len, fp);
+	read = getline(&line, &len, fp);
+	it = 0;
+	while ((read = getline(&line, &len, fp)) != -1) {
+		line = trim(line, (int)read);
+		for (it=0; it; it++)
+			if (line[it] == ':')
+				break;
+		obj_value = line + it + 2;
+		sscanf(obj_value, "%lf", &b.b[it++]);
+	}
+	fclose(fp);
+	
+	return ret;
+}
+
+bool findb(int a, int t, vector<ptree>& Q, bstate& b) {
+	for (int i=0; i<sz(Q); ++i) {
+		for (int o=0; o<num_of_observations; ++o) {
+			for (int j=0; j<sz(V[t-1]); ++j) {
+				ptree p = Q[i];
+				p.choice[o] = V[t-1][j];
+				double delta = check_pnew(Q, p, b);
+				if (delta > 0) return true;
+			}
+		}
+	}
+	return false;
 }
 
 void witness(int t, int a, vector<ptree>& Q) {
