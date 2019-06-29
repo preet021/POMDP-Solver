@@ -511,47 +511,47 @@ void prune(int t, vector<ptree>& X) {
 	for (int i=0; i<sz(X); ++i)
 		sX.insert(i);
 	double delta;
-	FILE *f;
+	FILE *fp;
 	for (int i=0; i<sz(X); ++i) {
 
 		// Opening the input file to LP solver
-		f = fopen("model.lp", "w");
+		fp = fopen("model.lp", "w");
 
 		// Maximize the objective function
-		fprintf(f, "max: 1 x0;\n\n");
+		fprintf(fp, "max: 1 x0;\n\n");
 
 		// Constraint that all b[s] >= 0
 		for (int s=1; s<=num_of_states; ++s)
-			fprintf(f, "x%d >= 0;\n", s);
+			fprintf(fp, "x%d >= 0;\n", s);
 
 		// Constraint that sum{b[s]} = 1
-		fprintf(f, "x1");
+		fprintf(fp, "x1");
 		for (int s=2; s<=num_of_states; ++s)
-			fprintf(f, " + x%d", s);
-		fprintf(f, " = 1;\n");
+			fprintf(fp, " + x%d", s);
+		fprintf(fp, " = 1;\n");
 
 		// Constraint b.p >= delta + b.p' for all p' in X
 		for (int j=0; j<sz(X); ++j) {
 			if (sX.find(j) == sX.end()) continue;
-			fprintf(f, "%f x1\n", X[i].value[1-1] - X[j].value[1-1]);
+			fprintf(fp, "%f x1\n", X[i].value[1-1] - X[j].value[1-1]);
 			for (int s=2; s<=num_of_states; ++s)
-				fprintf(f, " + %f x%d", X[i].value[s-1] - X[j].value[s-1], s);
-			fprintf(f, " - x0 >= 0;\n");
+				fprintf(fp, " + %f x%d", X[i].value[s-1] - X[j].value[s-1], s);
+			fprintf(fp, " - x0 >= 0;\n");
 		}
 
 		// Closing the file
-		fclose(f);
+		fclose(fp);
 
 		// Calling the solver
 		system("lp_solve model.lp > out.lp");
 
 		// getting the output of LP solver
-		f = fopen("out.lp", "r");
+		fp = fopen("out.lp", "r");
 		int it;
 		char *line, *obj_value;
 		size_t len = 0;
-		ssize_t read = getline(&line, &len, f);
-		if ((read = getline(&line, &len, f)) != -1) {
+		ssize_t read = getline(&line, &len, fp);
+		if ((read = getline(&line, &len, fp)) != -1) {
 			line = trim(line, (int)read);
 			for (it=0; it; it++)
 				if (line[it] == ':')
@@ -559,7 +559,7 @@ void prune(int t, vector<ptree>& X) {
 			obj_value = line + it + 2;
 			sscanf(obj_value, "%lf", &delta);
 		}
-		fclose(f);
+		fclose(fp);
 
 		if (delta > 0)
 			V[t].push_back(X[i]);
