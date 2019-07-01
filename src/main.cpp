@@ -18,7 +18,7 @@ using namespace std;
 #include "witness.h"
 
 const double INF = 1e18;
-const int TIME_HORIZON = 100;
+const int TIME_HORIZON = 1;
 bool has_discount = false, has_states = false, has_actions = false, has_observations = false, has_start = false;
 double **R, ***T, ***O;
 double discount;
@@ -297,8 +297,16 @@ int main(int argc, char* argv[]) {
 	cout << '\n';
 
 	double epsilon = 1e-3;
-	// solvePOMDP(epsilon);
-
+	solvePOMDP(epsilon);
+	int best_action = -1;
+	double bestval = -INF;
+	for (int i=0; i<sz(V[1]); ++i) {
+		if (dot_product(cur_b.b, V[1][i].value) > bestval) {
+			bestval = dot_product(cur_b.b, V[1][i].value);
+			best_action = V[1][i].action;
+		}
+	}
+	cout << "best_action: " << best_action << endl;
 	exit(EXIT_SUCCESS);
 }
 
@@ -414,16 +422,21 @@ void back(vector <double>& alpha, int a, int o, vector<double>& _alpha) {
 	_alpha.clear();
 	_alpha.assign(num_of_states, 0);
 	for (int s=0; s<num_of_states; ++s)
-		for (int _s=0; _s<num_of_states; _s++)
-			_alpha[s] += alpha[_s] * T[s][a][_s] * O[_s][a][o];
+		for (int _s=0; _s<num_of_states; _s++) {
+			double Tsas_ = 0, Oa_so = 0;
+			if (T[s][a][_s]) Tsas_ = T[s][a][_s];
+			if (O[a][_s][o]) Oa_so = O[a][_s][o];
+			// _alpha[s] += alpha[_s] * T[s][a][_s] * O[_s][a][o];
+			_alpha[s] += alpha[_s] * Tsas_ * Oa_so;
+		}
 }
 
 ptree& choice(ptree& p, int o) {
 	if (p.has_choice[o] == 0) {
 		int a = p.action;
-		std::vector <ptree> S;
+		vector <ptree> S;
 		ptree temp;
-		std::vector <double> _alpha;
+		vector <double> _alpha;
 		for (int i=0; i<sz(V[time_horizon-1]); ++i) {
 			back(V[time_horizon-1][i].value, a, o, temp.value);
 			S.push_back(temp);
@@ -441,10 +454,12 @@ vector <double>& value(ptree& p) {
 		int a = p.action;
 		for (int s=0; s<num_of_states; ++s) {
 			p.value[s] = R[s][a];
-			for (int o=0; o<num_of_observations; ++o) {
-				ptree ret = choice(p, o);
-				back(ret.value, a, o, _alpha);
-				p.value[s] += discount * _alpha[s];
+			if (time_horizon > 1) {	
+				for (int o=0; o<num_of_observations; ++o) {
+					ptree ret = choice(p, o);
+					back(ret.value, a, o, _alpha);
+					p.value[s] += discount * _alpha[s];
+				}
 			}
 		}
 	}
@@ -484,6 +499,8 @@ ptree besttree(bstate& b, int a, vector<ptree>& X) {
 		}
 		p.choice[o] = bestpol;		
 	}
+	p.value = value(p);
+	return p;
 }
 
 double weakbound(vector <ptree>& X, vector <ptree>& Y) {
@@ -503,6 +520,7 @@ double weakbound(vector <ptree>& X, vector <ptree>& Y) {
 }
 
 double difference(vector <ptree>& a, vector <ptree>& b) {
+	cout << "difffff" << endl;
 	return max(weakbound(a, b), weakbound(b, a));
 }
 
@@ -533,7 +551,7 @@ void prune(int t, vector<ptree>& X) {
 		// Constraint b.p >= delta + b.p' for all p' in X
 		for (int j=0; j<sz(X); ++j) {
 			if (sX.find(j) == sX.end()) continue;
-			fprintf(fp, "%f x1\n", X[i].value[1-1] - X[j].value[1-1]);
+			fprintf(fp, "%f x1", X[i].value[1-1] - X[j].value[1-1]);
 			for (int s=2; s<=num_of_states; ++s)
 				fprintf(fp, " + %f x%d", X[i].value[s-1] - X[j].value[s-1], s);
 			fprintf(fp, " - x0 >= 0;\n");
@@ -586,7 +604,7 @@ double check_pnew(vector<ptree>& X, ptree& pnew, bstate& b) {
 
 	// Constraint b.pnew >= delta + b.p' for all p' in X
 	for (int j=0; j<sz(X); ++j) {
-		fprintf(fp, "%f x1\n", pnew.value[1-1] - X[j].value[1-1]);
+		fprintf(fp, "%f x1", pnew.value[1-1] - X[j].value[1-1]);
 		for (int s=2; s<=num_of_states; ++s)
 			fprintf(fp, " + %f x%d", pnew.value[s-1] - X[j].value[s-1], s);
 		fprintf(fp, " - x0 >= 0;\n");
@@ -649,8 +667,7 @@ bool findb(int a, int t, vector<ptree>& Q, bstate& b) {
 
 void witness(int t, int a, vector<ptree>& Q) {
 	bstate b;
-	for (int i=0; i<num_of_states; ++i)
-		b.b[i] = 0;
+	b.b.assign(num_of_states, 0);
 	b.b[0] = 1;
 	Q.push_back(besttree(b, a, V[t-1]));
 	bool has_witness = findb(a, t, Q, b);
@@ -674,5 +691,5 @@ void solvePOMDP(double epsilon) {
 		}
 		prune(time_horizon, X);
 		++time_horizon;
-	} while (!(difference(V[time_horizon-1], V[time_horizon]) <= epsilon));
+	} while ( (time_horizon <= TIME_HORIZON) && (!(difference(V[time_horizon-1], V[time_horizon]) <= epsilon)) );
 }
