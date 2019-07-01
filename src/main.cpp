@@ -28,7 +28,9 @@ vector <ptree> V[TIME_HORIZON]; // Value Function
 queue <re> Q_R;
 queue <te> Q_T;
 queue <oe> Q_O;
-oe obs; te trns; re rew;
+oe obs;
+te trns;
+re rew;
 bstate cur_b;
 
 // Function declarations
@@ -156,7 +158,11 @@ int main(int argc, char* argv[]) {
 			sm = 1;
 			for (int i=0; i<num_of_states; ++i)
 				sm -= cur_b.b[i];
-			assert(sm <= 1e-6);
+			// Checking if sum of probabilities is one
+			if (sm > 0.000001 || sm < -0.000001) {
+				fprintf(stderr, "ERROR: start belief state probabilities inconsistent\n");
+    			exit(EXIT_FAILURE);
+			}
 		}
 		else if (!strncmp("R", line, 1)) {
 			t = strtok(line+1, ": \n\t\v\r\f");
@@ -298,6 +304,8 @@ int main(int argc, char* argv[]) {
 
 	double epsilon = 1e-3;
 	solvePOMDP(epsilon);
+	system("rm model.lp out.lp");
+	cout << "POMDP Solved" << endl;
 	int best_action = -1;
 	double bestval = -INF;
 	for (int i=0; i<sz(V[1]); ++i) {
@@ -520,8 +528,10 @@ double weakbound(vector <ptree>& X, vector <ptree>& Y) {
 }
 
 double difference(vector <ptree>& a, vector <ptree>& b) {
-	cout << "difffff" << endl;
-	return max(weakbound(a, b), weakbound(b, a));
+	double p1 = weakbound(a, b), p2 = weakbound(b, a);
+	cout << p1 << " diff " << p2 << endl;
+	if (p1 > p2) return p1;
+	else return p2;
 }
 
 void prune(int t, vector<ptree>& X) {
@@ -578,7 +588,6 @@ void prune(int t, vector<ptree>& X) {
 			sscanf(obj_value, "%lf", &delta);
 		}
 		fclose(fp);
-
 		if (delta > 0)
 			V[t].push_back(X[i]);
 		else
@@ -673,6 +682,7 @@ void witness(int t, int a, vector<ptree>& Q) {
 	bool has_witness = findb(a, t, Q, b);
 	ptree p;
 	while (has_witness) {
+		cout << "has_witness" << endl;
 		p = besttree(b, a, V[t-1]);
 		Q.push_back(p);
 		has_witness = findb(a, t, Q, b);
