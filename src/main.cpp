@@ -21,7 +21,7 @@ const double INF = 1e18;
 const int TIME_HORIZON = 1;
 bool has_discount = false, has_states = false, has_actions = false, has_observations = false, has_start = false;
 double **R, ***T, ***O;
-double discount;
+double discount, almost_zero = 1e-6;
 int num_of_states = 0, num_of_actions = 0, num_of_observations = 0, time_horizon = 0;
 map <string, int> state_map, action_map, obs_map;
 vector <ptree> V[TIME_HORIZON]; // Value Function
@@ -40,7 +40,7 @@ void store_obs_func();
 double difference(vector <ptree>& a, vector <ptree>& b);
 double weakbound(vector <ptree>& X, vector <ptree>& Y);
 ptree besttree(bstate& b, int a, vector<ptree>& X);
-void solvePOMDP(double epsilon);
+void solvePOMDP();
 void witness(int t, int a);
 void prune(int t, vector<ptree>& X);
 bool findb(int a, int t, vector<ptree>& Q, bstate& b);
@@ -158,7 +158,7 @@ int main(int argc, char* argv[]) {
 			sm = 1;
 			for (int i=0; i<num_of_states; ++i)
 				sm -= cur_b.b[i];
-			// Checking if sum of probabilities is one
+			// Checking if sum of probabilities is 1
 			if (sm > 0.000001 || sm < -0.000001) {
 				fprintf(stderr, "ERROR: start belief state probabilities inconsistent\n");
     			exit(EXIT_FAILURE);
@@ -280,6 +280,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Clearing the state, action and obs enumeration
+    /* Note: you may have to keep a reverse map */
     state_map.clear();
     action_map.clear();
     obs_map.clear();
@@ -293,6 +294,7 @@ int main(int argc, char* argv[]) {
     // Storing the Observation function   O(a, s', o)
     store_obs_func();
 
+    // Printing the input POMDP
 	cout << "Number of States: " << num_of_states << '\n';
 	cout << "Number of Actions: " << num_of_actions << '\n';
 	cout << "Number of Observations: " << num_of_observations << '\n';
@@ -302,9 +304,13 @@ int main(int argc, char* argv[]) {
 		cout << cur_b.b[i] << " ";
 	cout << '\n';
 
-	double epsilon = 1e-3;
-	solvePOMDP(epsilon);
+	// Calling the solver
+	solvePOMDP();
+
+	// Removing the intermediate auxilary files
 	system("rm model.lp out.lp");
+
+	// Printing the best action after taking the observation as input
 	cout << "POMDP Solved" << endl;
 	int best_action = -1;
 	double bestval = -INF;
@@ -427,16 +433,18 @@ void store_obs_func() {
 }
 
 void back(vector <double>& alpha, int a, int o, vector<double>& _alpha) {
+	/*
+		back[alpha,a,o](s) is the expected reward received by the agent
+		that takes action a starting in s, observer o and then follows the
+		policy tree corresponding to alpha. It does not include the reward
+		of taking action a in s (i.e. R(s, a)).
+	*/
 	_alpha.clear();
 	_alpha.assign(num_of_states, 0);
 	for (int s=0; s<num_of_states; ++s)
-		for (int _s=0; _s<num_of_states; _s++) {
-			double Tsas_ = 0, Oa_so = 0;
-			if (T[s][a][_s]) Tsas_ = T[s][a][_s];
-			if (O[a][_s][o]) Oa_so = O[a][_s][o];
-			// _alpha[s] += alpha[_s] * T[s][a][_s] * O[_s][a][o];
-			_alpha[s] += alpha[_s] * Tsas_ * Oa_so;
-		}
+		for (int _s=0; _s<num_of_states; _s++)
+			if (O[a][_s][o] && T[s][a][_s])
+				_alpha[s] += alpha[_s] * T[s][a][_s] * O[a][_s][o];
 }
 
 ptree& choice(ptree& p, int o) {
@@ -461,8 +469,8 @@ vector <double>& value(ptree& p) {
 		p.value.assign(num_of_states, 0);
 		int a = p.action;
 		for (int s=0; s<num_of_states; ++s) {
-			p.value[s] = R[s][a];
-			if (time_horizon > 1) {	
+			if (R[s][a]) p.value[s] += R[s][a];
+			if (time_horizon > 1) {
 				for (int o=0; o<num_of_observations; ++o) {
 					ptree ret = choice(p, o);
 					back(ret.value, a, o, _alpha);
@@ -476,11 +484,10 @@ vector <double>& value(ptree& p) {
 
 ptree best(bstate& b, vector<ptree>& X) {
 	ptree bestpol;
-	bestpol.value.assign(num_of_states, -INF);
 	double bestval = -INF, val;
 	for (int pol=0; pol<sz(X); pol++) {
 		val = dot_product(b.b, X[pol].value);
-		if ((val > bestval) or ((val == bestval) and (X[pol] > bestpol))) {
+		if (val >= bestval) {
 			bestval = val;
 			bestpol = X[pol];
 		}
@@ -689,7 +696,7 @@ void witness(int t, int a, vector<ptree>& Q) {
 	}
 }
 
-void solvePOMDP(double epsilon) {
+void solvePOMDP() {
 	time_horizon = 1;
 	vector<ptree> Q, X;
 	do {
@@ -701,5 +708,5 @@ void solvePOMDP(double epsilon) {
 		}
 		prune(time_horizon, X);
 		++time_horizon;
-	} while ( (time_horizon <= TIME_HORIZON) && (!(difference(V[time_horizon-1], V[time_horizon]) <= epsilon)) );
+	} while ( (time_horizon <= TIME_HORIZON) && (!(difference(V[time_horizon-1], V[time_horizon]) <= almost_zero)) );
 }
