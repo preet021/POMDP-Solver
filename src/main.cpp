@@ -37,18 +37,18 @@ bstate cur_b;
 void store_reward_func();
 void store_transition_func();
 void store_obs_func();
+
 double difference(vector <ptree>& a, vector <ptree>& b);
 double weakbound(vector <ptree>& X, vector <ptree>& Y);
-ptree besttree(bstate& b, int a, vector<ptree>& X);
+
 void solvePOMDP();
 void witness(int t, int a);
 void prune(int t, vector<ptree>& X);
 bool findb(int a, int t, vector<ptree>& Q, bstate& b);
 double check_pnew(vector<ptree>& Q, ptree& pnew, bstate& b);
+
+ptree besttree(bstate& b, int a, vector<ptree>& X);
 void back(vector <double>& alpha, int a, int o, vector<double>& _alpha);
-ptree best(bstate& b, vector<ptree>& X);
-ptree& choice (ptree& p, int o);
-vector <double>& value(ptree& p);
 
 int main(int argc, char* argv[]) {
 
@@ -447,74 +447,41 @@ void back(vector <double>& alpha, int a, int o, vector<double>& _alpha) {
 				_alpha[s] += alpha[_s] * T[s][a][_s] * O[a][_s][o];
 }
 
-ptree& choice(ptree& p, int o) {
-	if (p.has_choice[o] == 0) {
-		int a = p.action;
-		vector <ptree> S;
-		ptree temp;
-		vector <double> _alpha;
-		for (int i=0; i<sz(V[time_horizon-1]); ++i) {
-			back(V[time_horizon-1][i].value, a, o, temp.value);
-			S.push_back(temp);
-		}
-		p.has_choice[o] = 1;
-		p.choice[o] = best(cur_b, S);
-	}
-	return p.choice[o];
-}
+ptree besttree(bstate& b, int a, vector<ptree>& X) {
+	ptree p;
+	p.action = a;
 
-vector <double>& value(ptree& p) {
-	if (!sz(p.value)) {
-		vector <double> _alpha;
-		p.value.assign(num_of_states, 0);
-		int a = p.action;
-		for (int s=0; s<num_of_states; ++s) {
-			if (R[s][a]) p.value[s] += R[s][a];
-			if (time_horizon > 1) {
-				for (int o=0; o<num_of_observations; ++o) {
-					ptree ret = choice(p, o);
-					back(ret.value, a, o, _alpha);
-					p.value[s] += discount * _alpha[s];
+	p.value.assign(num_of_states, 0);
+	for (int s=0; s<num_of_states; ++s)
+		if (R[s][a]) p.value[s] += R[s][a];
+
+	if (time_horizon > 1) {
+		// Finding the best t-1 step policy tree for each observation
+		p.choice.resize(num_of_observations);
+		vector <double> _vec;
+		for (int o=0; o<num_of_observations; ++o) {
+			int bestpol = -1;
+			double bestval = -INF, val;
+			for (int i=0; i<sz(X); ++i) {
+				back(X[i].value, a, o, _vec);
+				val = dot_product(b.b, _vec);
+				if (val > bestval) {
+					bestval = val;
+					bestpol = i;
 				}
 			}
+			assert(bestpol != -1);
+			p.choice[o] = X[bestpol];
 		}
-	}
-	return p.value;
-}
-
-ptree best(bstate& b, vector<ptree>& X) {
-	ptree bestpol;
-	double bestval = -INF, val;
-	for (int pol=0; pol<sz(X); pol++) {
-		val = dot_product(b.b, X[pol].value);
-		if (val >= bestval) {
-			bestval = val;
-			bestpol = X[pol];
-		}
-	}
-	return bestpol;
-}
-
-ptree besttree(bstate& b, int a, vector<ptree>& X) {
-	ptree p, pol;
-	p.action = a;
-	vector <double> _vec;
-	for (int o=0; o<num_of_observations; ++o) {
-		ptree bestpol;
-		bestpol.value.assign(num_of_states, -INF);
-		double bestval = -INF, val;
-		for (int i=0; i<sz(X); ++i) {
-			back(value(X[i]), a, o, _vec);
-			val = dot_product(b.b, _vec);
-			pol.value = _vec;
-			if ((val > bestval) or ((val == bestval) and (pol > bestpol))) {
-				bestval = val;
-				bestpol = pol;
+		// Calculating the value vector
+		vector <double> _alpha;
+		for (int s=0; s<num_of_states; ++s) {
+			for (int o=0; o<num_of_observations; ++o) {
+				back(p.choice[o].value, a, o, _alpha);
+				p.value[s] += discount * _alpha[s];
 			}
 		}
-		p.choice[o] = bestpol;		
 	}
-	p.value = value(p);
 	return p;
 }
 
@@ -525,7 +492,7 @@ double weakbound(vector <ptree>& X, vector <ptree>& Y) {
 		for (int j=0; j<sz(Y); ++j) {
 			double maxcomponent = -INF;
 			for (int s=0; s<num_of_states; ++s) {
-				maxcomponent = max(maxcomponent, value(X[i])[s] - value(Y[j])[s]);
+				maxcomponent = max(maxcomponent, X[i].value[s] - Y[j].value[s]);
 			}
 			mindiff = min(mindiff, maxcomponent);
 		}
