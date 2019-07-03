@@ -159,7 +159,7 @@ int main(int argc, char* argv[]) {
 			for (int i=0; i<num_of_states; ++i)
 				sm -= cur_b.b[i];
 			// Checking if sum of probabilities is 1
-			if (sm > 0.000001 || sm < -0.000001) {
+			if (sm > almost_zero || sm < -almost_zero) {
 				fprintf(stderr, "ERROR: start belief state probabilities inconsistent\n");
     			exit(EXIT_FAILURE);
 			}
@@ -308,7 +308,7 @@ int main(int argc, char* argv[]) {
 	solvePOMDP();
 
 	// Removing the intermediate auxilary files
-	system("rm model.lp out.lp");
+	// system("rm model.lp out.lp");
 
 	// Printing the best action after taking the observation as input
 	cout << "POMDP Solved" << endl;
@@ -503,9 +503,8 @@ double weakbound(vector <ptree>& X, vector <ptree>& Y) {
 
 double difference(vector <ptree>& a, vector <ptree>& b) {
 	double p1 = weakbound(a, b), p2 = weakbound(b, a);
-	cout << p1 << " diff " << p2 << endl;
 	if (p1 > p2) return p1;
-	else return p2;
+	return p2;
 }
 
 void prune(int t, vector<ptree>& X) {
@@ -656,7 +655,6 @@ void witness(int t, int a, vector<ptree>& Q) {
 	bool has_witness = findb(a, t, Q, b);
 	ptree p;
 	while (has_witness) {
-		cout << "has_witness" << endl;
 		p = besttree(b, a, V[t-1]);
 		Q.push_back(p);
 		has_witness = findb(a, t, Q, b);
@@ -675,5 +673,5 @@ void solvePOMDP() {
 		}
 		prune(time_horizon, X);
 		++time_horizon;
-	} while ( (time_horizon <= TIME_HORIZON) && (!(difference(V[time_horizon-1], V[time_horizon]) <= almost_zero)) );
+	} while ( (time_horizon <= TIME_HORIZON) && (!(difference(V[time_horizon-1], V[time_horizon]) <= 0)) );
 }
