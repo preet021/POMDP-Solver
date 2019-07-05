@@ -18,13 +18,13 @@ using namespace std;
 #include "witness.h"
 
 const double INF = 1e18;
-const int TIME_HORIZON = 2;
+const int TIME_HORIZON = 13;
 bool has_discount = false, has_states = false, has_actions = false, has_observations = false, has_start = false;
 double **R, ***T, ***O;
 double discount, almost_zero = 1e-6;
 int num_of_states = 0, num_of_actions = 0, num_of_observations = 0, time_horizon = 0;
 map <string, int> state_map, action_map, obs_map;
-vector <ptree> V[TIME_HORIZON]; // Value Function
+vector <ptree> V[TIME_HORIZON+1]; // Value Function
 queue <re> Q_R;
 queue <te> Q_T;
 queue <oe> Q_O;
@@ -49,6 +49,8 @@ double check_pnew(vector<ptree>& Q, ptree& pnew, bstate& b);
 
 ptree besttree(bstate& b, int a, vector<ptree>& X);
 void back(vector <double>& alpha, int a, int o, vector<double>& _alpha);
+
+void print_tree(ptree& p);
 
 int main(int argc, char* argv[]) {
 
@@ -312,6 +314,12 @@ int main(int argc, char* argv[]) {
 
 	// Printing the best action after taking the observation as input
 	cout << "POMDP Solved" << endl;
+	for (int i=0; i<sz(V[TIME_HORIZON]); ++i) {
+		cout << "\nAction: " << V[TIME_HORIZON][i].action << "\nValue: ";
+		for (int s=0; s<num_of_states; ++s)
+			cout << V[TIME_HORIZON][i].value[s] << " ";
+		cout << endl;
+	}
 	int best_action = -1;
 	double bestval = -INF;
 	for (int i=0; i<sz(V[TIME_HORIZON]); ++i) {
@@ -320,7 +328,7 @@ int main(int argc, char* argv[]) {
 			best_action = V[TIME_HORIZON][i].action;
 		}
 	}
-	cout << "best_action: " << best_action << endl;
+	cout << "\nbest_action: " << best_action << endl;
 	exit(EXIT_SUCCESS);
 }
 
@@ -443,8 +451,9 @@ void back(vector <double>& alpha, int a, int o, vector<double>& _alpha) {
 	_alpha.assign(num_of_states, 0);
 	for (int s=0; s<num_of_states; ++s)
 		for (int _s=0; _s<num_of_states; _s++)
-			if (O[a][_s][o] && T[s][a][_s])
+			if (O[a][_s][o] && T[s][a][_s]) {
 				_alpha[s] += alpha[_s] * T[s][a][_s] * O[a][_s][o];
+			}
 }
 
 ptree besttree(bstate& b, int a, vector<ptree>& X) {
@@ -482,7 +491,20 @@ ptree besttree(bstate& b, int a, vector<ptree>& X) {
 			}
 		}
 	}
+	// print_tree(p);
 	return p;
+}
+
+void print_tree(ptree& p) {
+	cout << "\nAction: " << p.action << "\nValue: ";
+	for (int s=0; s<num_of_states; ++s)
+		cout << p.value[s] << " ";
+	if (time_horizon > 1) {	
+		cout << "\nChoice: ";
+		for (int o=0; o<num_of_observations; ++o)
+			cout << p.choice[o].action << " ";
+	}
+	cout << endl;
 }
 
 double weakbound(vector <ptree>& X, vector <ptree>& Y) {
@@ -501,20 +523,21 @@ double weakbound(vector <ptree>& X, vector <ptree>& Y) {
 }
 
 double difference(vector <ptree>& a, vector <ptree>& b) {
-	cout << sz(a) << " diff " << sz(b) << endl;
+	// cout << sz(a) << " diff " << sz(b) << endl;
 	double p1 = weakbound(a, b), p2 = weakbound(b, a);
 	if (p1 > p2) return p1;
 	return p2;
 }
 
 void prune(int t, vector<ptree>& X) {
+	V[t].clear();
 	set <int> sX;
 	for (int i=0; i<sz(X); ++i)
 		sX.insert(i);
 	double delta;
+	// cout << "entered pruned" << endl;
 	FILE *fp;
 	for (int i=0; i<sz(X); ++i) {
-
 		// Opening the input file to LP solver
 		fp = fopen("model.lp", "w");
 
@@ -562,8 +585,11 @@ void prune(int t, vector<ptree>& X) {
 			sscanf(obj_value, "%lf", &delta);
 		}
 		fclose(fp);
-		if (delta > 0)
+		// cout << i << " check lll" << endl;
+		if (delta > 0) {
+			// cout << X[i].action << endl;
 			V[t].push_back(X[i]);
+		}
 		else
 			sX.erase(i);
 	}
@@ -586,7 +612,7 @@ double check_pnew(vector<ptree>& X, ptree& pnew, bstate& b) {
 	fprintf(fp, " = 1;\n");
 
 	// Constraint b.pnew >= delta + b.p' for all p' in X
-	cout << sz(X) << endl;
+	// print_tree(pnew); cout << sz(X) << endl;
 	for (int j=0; j<sz(X); ++j) {
 		fprintf(fp, "%f x1", pnew.value[1-1] - X[j].value[1-1]);
 		for (int s=2; s<=num_of_states; ++s)
@@ -609,6 +635,11 @@ double check_pnew(vector<ptree>& X, ptree& pnew, bstate& b) {
 
 	// getting the value of objective function
 	ssize_t read = getline(&line, &len, fp);
+	if (!strncmp(line, "This problem is infeasible", 26)) {
+		// cout << "pnew failure" << endl;
+		return -1; // Failure
+	}
+
 	if ((read = getline(&line, &len, fp)) != -1) {
 		line = trim(line, (int)read);
 		for (it=0; it; it++)
@@ -631,21 +662,40 @@ double check_pnew(vector<ptree>& X, ptree& pnew, bstate& b) {
 		sscanf(obj_value, "%lf", &b.b[it++]);
 	}
 	fclose(fp);
-	
+	// cout << ret << " pnew" << endl;
+	// exit(0);
 	return ret;
 }
 
 bool findb(int a, int t, vector<ptree>& Q, bstate& b) {
+	vector <double> _alpha;
+	// cout << "entering findb" << endl;
 	for (int i=0; i<sz(Q); ++i) {
 		for (int o=0; o<num_of_observations; ++o) {
 			for (int j=0; j<sz(V[t-1]); ++j) {
-				ptree p = Q[i];
-				p.choice[o] = V[t-1][j];
-				double delta = check_pnew(Q, p, b);
-				if (delta > 0) return true;
+				ptree pnew = Q[i];
+				
+				// Altering one of the subtrees of Q[i] to make pnew
+				pnew.choice[o] = V[t-1][j];
+
+				// Updating the value vector of pnew
+				pnew.value.assign(num_of_states, 0);
+				for (int s=0; s<num_of_states; ++s) {
+					if (R[s][pnew.action]) pnew.value[s] += R[s][a];
+					for (int ob=0; ob<num_of_observations; ++ob) {
+						back(pnew.choice[ob].value, pnew.action, ob, _alpha);
+						pnew.value[s] += discount * _alpha[s];
+					}
+				}
+				double delta = check_pnew(Q, pnew, b);
+				if (delta > almost_zero) {
+					// cout << delta << " findb returning true" << endl;
+					return true;
+				}
 			}
 		}
 	}
+	// cout << "findb returning false" << endl;
 	return false;
 }
 
@@ -658,7 +708,6 @@ void witness(int t, int a, vector<ptree>& Q) {
 	ptree p;
 	while (has_witness) {
 		cout << "has_witness" << endl;
-		cout << b.b[0] << " " << b.b[1] << endl;
 		p = besttree(b, a, V[t-1]);
 		Q.push_back(p);
 		has_witness = findb(a, t, Q, b);
@@ -677,5 +726,6 @@ void solvePOMDP() {
 			X.insert(X.end(), Q.begin(), Q.end());
 		}
 		prune(time_horizon, X);
+		cout << time_horizon << " " << sz(V[time_horizon]) << endl;
 	} while ( (time_horizon < TIME_HORIZON) && !(difference(V[time_horizon-1], V[time_horizon]) <= 0) );
 }
