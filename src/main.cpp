@@ -18,12 +18,13 @@ using namespace std;
 #include "witness.h"
 
 const double INF = 1e18;
-const int TIME_HORIZON = 13;
+const int TIME_HORIZON = 2;
 bool has_discount = false, has_states = false, has_actions = false, has_observations = false, has_start = false;
 double **R, ***T, ***O;
 double discount, almost_zero = 1e-6;
 int num_of_states = 0, num_of_actions = 0, num_of_observations = 0, time_horizon = 0;
 map <string, int> state_map, action_map, obs_map;
+map <int, string> inv_state_map, inv_action_map, inv_obs_map;
 vector <ptree> V[TIME_HORIZON+1]; // Value Function
 queue <re> Q_R;
 queue <te> Q_T;
@@ -281,11 +282,16 @@ int main(int argc, char* argv[]) {
     	exit(EXIT_FAILURE);
     }
 
-    // Clearing the state, action and obs enumeration
-    /* Note: you may have to keep a reverse map */
-    state_map.clear();
-    action_map.clear();
-    obs_map.clear();
+    // Creating the inverese state, action and obs map
+    for (auto it: state_map) {
+    	inv_state_map[it.second] = it.first; 
+    }
+    for (auto it: action_map) {
+    	inv_action_map[it.second] = it.first;
+    }
+    for (auto it: obs_map) {
+    	inv_obs_map[it.second] = it.first;
+    }
     
     // Storing the Reward function   R(s, a)
     store_reward_func();
@@ -304,21 +310,18 @@ int main(int argc, char* argv[]) {
 	cout << "Initial Belief State: ";
 	for (int i=0; i<num_of_states; ++i)
 		cout << cur_b.b[i] << " ";
-	cout << '\n';
+	cout << "\n\n";
 
 	// Calling the solver
 	solvePOMDP();
 
 	// Removing the intermediate auxilary files
-	// system("rm model.lp out.lp");
+	system("rm model.lp out.lp");
 
 	// Printing the best action after taking the observation as input
-	cout << "POMDP Solved" << endl;
+	cout << "\nPOMDP Solved" << endl;
 	for (int i=0; i<sz(V[TIME_HORIZON]); ++i) {
-		cout << "\nAction: " << V[TIME_HORIZON][i].action << "\nValue: ";
-		for (int s=0; s<num_of_states; ++s)
-			cout << V[TIME_HORIZON][i].value[s] << " ";
-		cout << endl;
+		print_tree(V[TIME_HORIZON][i]);
 	}
 	int best_action = -1;
 	double bestval = -INF;
@@ -328,7 +331,7 @@ int main(int argc, char* argv[]) {
 			best_action = V[TIME_HORIZON][i].action;
 		}
 	}
-	cout << "\nbest_action: " << best_action << endl;
+	cout << "\nbest_action: " << inv_action_map[best_action] << endl;
 	exit(EXIT_SUCCESS);
 }
 
@@ -480,13 +483,13 @@ ptree besttree(bstate& b, int a, vector<ptree>& X) {
 				}
 			}
 			assert(bestpol != -1);
-			p.choice[o] = X[bestpol];
+			p.choice[o] = bestpol;
 		}
 		// Calculating the value vector
 		vector <double> _alpha;
 		for (int s=0; s<num_of_states; ++s) {
 			for (int o=0; o<num_of_observations; ++o) {
-				back(p.choice[o].value, a, o, _alpha);
+				back(X[p.choice[o]].value, a, o, _alpha);
 				p.value[s] += discount * _alpha[s];
 			}
 		}
@@ -496,13 +499,13 @@ ptree besttree(bstate& b, int a, vector<ptree>& X) {
 }
 
 void print_tree(ptree& p) {
-	cout << "\nAction: " << p.action << "\nValue: ";
+	cout << "\nAction: " << inv_action_map[p.action] << "\nValue: ";
 	for (int s=0; s<num_of_states; ++s)
 		cout << p.value[s] << " ";
-	if (time_horizon > 1) {	
+	if (time_horizon > 1) {
 		cout << "\nChoice: ";
 		for (int o=0; o<num_of_observations; ++o)
-			cout << p.choice[o].action << " ";
+			cout << inv_action_map[V[time_horizon-1][p.choice[o]].action] << " ";
 	}
 	cout << endl;
 }
@@ -676,14 +679,14 @@ bool findb(int a, int t, vector<ptree>& Q, bstate& b) {
 				ptree pnew = Q[i];
 				
 				// Altering one of the subtrees of Q[i] to make pnew
-				pnew.choice[o] = V[t-1][j];
+				pnew.choice[o] = j;
 
 				// Updating the value vector of pnew
 				pnew.value.assign(num_of_states, 0);
 				for (int s=0; s<num_of_states; ++s) {
 					if (R[s][pnew.action]) pnew.value[s] += R[s][a];
 					for (int ob=0; ob<num_of_observations; ++ob) {
-						back(pnew.choice[ob].value, pnew.action, ob, _alpha);
+						back(V[t-1][pnew.choice[ob]].value, pnew.action, ob, _alpha);
 						pnew.value[s] += discount * _alpha[s];
 					}
 				}
@@ -715,6 +718,7 @@ void witness(int t, int a, vector<ptree>& Q) {
 }
 
 void solvePOMDP() {
+	cout << "POMDP solver initiated...\n\n";
 	time_horizon = 0;
 	vector<ptree> Q, X;
 	do {
@@ -726,6 +730,6 @@ void solvePOMDP() {
 			X.insert(X.end(), Q.begin(), Q.end());
 		}
 		prune(time_horizon, X);
-		cout << time_horizon << " " << sz(V[time_horizon]) << endl;
+		cout << "Time Horizon: " << time_horizon << "  Size of Value Function: " << sz(V[time_horizon]) << endl;
 	} while ( (time_horizon < TIME_HORIZON) && !(difference(V[time_horizon-1], V[time_horizon]) <= 0) );
 }
