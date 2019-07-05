@@ -18,7 +18,7 @@ using namespace std;
 #include "witness.h"
 
 const double INF = 1e18;
-const int TIME_HORIZON = 1;
+const int TIME_HORIZON = 2;
 bool has_discount = false, has_states = false, has_actions = false, has_observations = false, has_start = false;
 double **R, ***T, ***O;
 double discount, almost_zero = 1e-6;
@@ -314,10 +314,10 @@ int main(int argc, char* argv[]) {
 	cout << "POMDP Solved" << endl;
 	int best_action = -1;
 	double bestval = -INF;
-	for (int i=0; i<sz(V[1]); ++i) {
-		if (dot_product(cur_b.b, V[1][i].value) > bestval) {
-			bestval = dot_product(cur_b.b, V[1][i].value);
-			best_action = V[1][i].action;
+	for (int i=0; i<sz(V[TIME_HORIZON]); ++i) {
+		if (dot_product(cur_b.b, V[TIME_HORIZON][i].value) > bestval) {
+			bestval = dot_product(cur_b.b, V[TIME_HORIZON][i].value);
+			best_action = V[TIME_HORIZON][i].action;
 		}
 	}
 	cout << "best_action: " << best_action << endl;
@@ -491,9 +491,8 @@ double weakbound(vector <ptree>& X, vector <ptree>& Y) {
 		double mindiff = INF;
 		for (int j=0; j<sz(Y); ++j) {
 			double maxcomponent = -INF;
-			for (int s=0; s<num_of_states; ++s) {
+			for (int s=0; s<num_of_states; ++s)
 				maxcomponent = max(maxcomponent, X[i].value[s] - Y[j].value[s]);
-			}
 			mindiff = min(mindiff, maxcomponent);
 		}
 		delta = max(delta, mindiff);
@@ -502,6 +501,7 @@ double weakbound(vector <ptree>& X, vector <ptree>& Y) {
 }
 
 double difference(vector <ptree>& a, vector <ptree>& b) {
+	cout << sz(a) << " diff " << sz(b) << endl;
 	double p1 = weakbound(a, b), p2 = weakbound(b, a);
 	if (p1 > p2) return p1;
 	return p2;
@@ -534,6 +534,7 @@ void prune(int t, vector<ptree>& X) {
 		// Constraint b.p >= delta + b.p' for all p' in X
 		for (int j=0; j<sz(X); ++j) {
 			if (sX.find(j) == sX.end()) continue;
+			if (j == i) continue;
 			fprintf(fp, "%f x1", X[i].value[1-1] - X[j].value[1-1]);
 			for (int s=2; s<=num_of_states; ++s)
 				fprintf(fp, " + %f x%d", X[i].value[s-1] - X[j].value[s-1], s);
@@ -585,6 +586,7 @@ double check_pnew(vector<ptree>& X, ptree& pnew, bstate& b) {
 	fprintf(fp, " = 1;\n");
 
 	// Constraint b.pnew >= delta + b.p' for all p' in X
+	cout << sz(X) << endl;
 	for (int j=0; j<sz(X); ++j) {
 		fprintf(fp, "%f x1", pnew.value[1-1] - X[j].value[1-1]);
 		for (int s=2; s<=num_of_states; ++s)
@@ -655,6 +657,8 @@ void witness(int t, int a, vector<ptree>& Q) {
 	bool has_witness = findb(a, t, Q, b);
 	ptree p;
 	while (has_witness) {
+		cout << "has_witness" << endl;
+		cout << b.b[0] << " " << b.b[1] << endl;
 		p = besttree(b, a, V[t-1]);
 		Q.push_back(p);
 		has_witness = findb(a, t, Q, b);
@@ -662,9 +666,10 @@ void witness(int t, int a, vector<ptree>& Q) {
 }
 
 void solvePOMDP() {
-	time_horizon = 1;
+	time_horizon = 0;
 	vector<ptree> Q, X;
 	do {
+		++time_horizon;
 		X.clear();
 		for (int a=0; a<num_of_actions; ++a) {
 			Q.clear();
@@ -672,6 +677,5 @@ void solvePOMDP() {
 			X.insert(X.end(), Q.begin(), Q.end());
 		}
 		prune(time_horizon, X);
-		++time_horizon;
-	} while ( (time_horizon <= TIME_HORIZON) && (!(difference(V[time_horizon-1], V[time_horizon]) <= 0)) );
+	} while ( (time_horizon < TIME_HORIZON) && !(difference(V[time_horizon-1], V[time_horizon]) <= 0) );
 }

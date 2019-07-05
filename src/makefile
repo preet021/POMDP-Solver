@@ -2,7 +2,7 @@ witness: main.o trim.o dot_product.o
 	g++ -o witness $^
 
 clean:
-	@rm -f *.o witness
+	@rm -f *.o witness *.lp
 
 main.o: witness.h main.cpp
 	$(CXX) -g -c main.cpp
