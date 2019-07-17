@@ -18,7 +18,7 @@ using namespace std;
 #include "witness.h"
 
 const double INF = 1e18;
-const int TIME_HORIZON = 2;
+const int TIME_HORIZON = 5;
 bool has_discount = false, has_states = false, has_actions = false, has_observations = false, has_start = false;
 double **R, ***T, ***O;
 double discount, almost_zero = 1e-6;
@@ -538,7 +538,9 @@ double difference(vector <ptree>& a, vector <ptree>& b) {
 void prune(int t, vector<ptree>& X) {
 	
 	V[t].clear();
-
+	for (int i=0; i<sz(X); ++i)
+		V[t].push_back(X[i]);
+	return;
 	set <int> sX;
 	for (int i=0; i<sz(X); ++i)
 		sX.insert(i);
@@ -669,14 +671,15 @@ double check_pnew(vector<ptree>& X, ptree& pnew, bstate& b) {
 	it = 0;
 	while ((read = getline(&line, &len, fp)) != -1) {
 		line = trim(line, (int)read);
-		for (it=0; line[it]; it++)
-			if (line[it] == ':')
+		for (int itr=0; line[itr]; itr++)
+			if (line[itr] == ':') {
+				obj_value = line + itr + 1;
 				break;
-		obj_value = line + it + 1;
+			}
 		sscanf(obj_value, "%lf", &b.b[it++]);
 	}
 	fclose(fp);
-	exit(0);
+	// exit(0);
 	return ret;
 }
 
@@ -684,8 +687,11 @@ bool findb(int a, int t, vector<ptree>& Q, bstate& b) {
 	vector <double> _alpha;
 	cout << "\nentering findb with action " << inv_action_map[a] << " and TH " << t << endl;
 	for (int i=0; i<sz(Q); ++i) {
+		
 		for (int o=0; o<num_of_observations; ++o) {
+			
 			for (int j=0; j<sz(V[t-1]); ++j) {
+				
 				ptree pnew = Q[i];
 				
 				// Altering one of the subtrees of Q[i] to make pnew
@@ -708,7 +714,10 @@ bool findb(int a, int t, vector<ptree>& Q, bstate& b) {
 				double delta = check_pnew(Q, pnew, b);
 				cout << delta << endl;
 				if (delta > 0) {
-					cout << "findb returning true" << endl;
+					cout << "improvement for bstate: ";
+					for (int i=0; i<num_of_states; ++i)
+						cout << b.b[i] << " ";
+					cout << "\nfindb returning true" << endl;
 					return true;
 				}
 			}
