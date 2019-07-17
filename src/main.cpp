@@ -316,7 +316,7 @@ int main(int argc, char* argv[]) {
 	solvePOMDP();
 
 	// Removing the intermediate auxilary files
-	system("rm model.lp out.lp");
+	// system("rm model.lp out.lp");
 
 	// Printing the best action after taking the observation as input
 	cout << "\nPOMDP Solved" << endl;
@@ -462,7 +462,10 @@ void back(vector <double>& alpha, int a, int o, vector<double>& _alpha) {
 ptree besttree(bstate& b, int a, vector<ptree>& X) {
 	ptree p;
 	p.action = a;
-
+	cout << "besttree" << endl;
+	for (int i=0; i<num_of_states; ++i)
+		cout << b.b[i] << " ";
+	cout << endl;
 	p.value.assign(num_of_states, 0);
 	for (int s=0; s<num_of_states; ++s)
 		if (R[s][a]) p.value[s] += R[s][a];
@@ -494,7 +497,7 @@ ptree besttree(bstate& b, int a, vector<ptree>& X) {
 			}
 		}
 	}
-	// print_tree(p);
+	print_tree(p);
 	return p;
 }
 
@@ -533,12 +536,15 @@ double difference(vector <ptree>& a, vector <ptree>& b) {
 }
 
 void prune(int t, vector<ptree>& X) {
+	
 	V[t].clear();
+
 	set <int> sX;
 	for (int i=0; i<sz(X); ++i)
 		sX.insert(i);
+	
 	double delta;
-	// cout << "entered pruned" << endl;
+	cout << "\nentered pruned with TH " << t << " and size of Qa " << sz(X) << endl;
 	FILE *fp;
 	for (int i=0; i<sz(X); ++i) {
 		// Opening the input file to LP solver
@@ -555,7 +561,7 @@ void prune(int t, vector<ptree>& X) {
 		fprintf(fp, "x1");
 		for (int s=2; s<=num_of_states; ++s)
 			fprintf(fp, " + x%d", s);
-		fprintf(fp, " = 1;\n");
+		fprintf(fp, " = 1.0;\n");
 
 		// Constraint b.p >= delta + b.p' for all p' in X
 		for (int j=0; j<sz(X); ++j) {
@@ -566,6 +572,9 @@ void prune(int t, vector<ptree>& X) {
 				fprintf(fp, " + %f x%d", X[i].value[s-1] - X[j].value[s-1], s);
 			fprintf(fp, " - x0 >= 0;\n");
 		}
+
+		// x0 is a free variable
+		fprintf(fp, "free x0;");
 
 		// Closing the file
 		fclose(fp);
@@ -581,27 +590,25 @@ void prune(int t, vector<ptree>& X) {
 		ssize_t read = getline(&line, &len, fp);
 		if ((read = getline(&line, &len, fp)) != -1) {
 			line = trim(line, (int)read);
-			for (it=0; it; it++)
+			for (it=0; line[it]; it++)
 				if (line[it] == ':')
 					break;
-			obj_value = line + it + 2;
+			obj_value = line + it + 1;
 			sscanf(obj_value, "%lf", &delta);
 		}
 		fclose(fp);
-		// cout << i << " check lll" << endl;
 		if (delta > 0) {
-			// cout << X[i].action << endl;
 			V[t].push_back(X[i]);
 		}
 		else
 			sX.erase(i);
 	}
+	cout << "returning from prune with size " << sz(V[t]) << endl;
 }
 
 double check_pnew(vector<ptree>& X, ptree& pnew, bstate& b) {
-
+	print_tree(pnew);
 	FILE *fp = fopen("model.lp", "w");
-	
 	fprintf(fp, "max: 1 x0;\n\n");
 
 	// Constraint that all b[s] >= 0
@@ -612,16 +619,18 @@ double check_pnew(vector<ptree>& X, ptree& pnew, bstate& b) {
 	fprintf(fp, "x1");
 	for (int s=2; s<=num_of_states; ++s)
 		fprintf(fp, " + x%d", s);
-	fprintf(fp, " = 1;\n");
+	fprintf(fp, " = 1.0;\n");
 
 	// Constraint b.pnew >= delta + b.p' for all p' in X
-	// print_tree(pnew); cout << sz(X) << endl;
 	for (int j=0; j<sz(X); ++j) {
 		fprintf(fp, "%f x1", pnew.value[1-1] - X[j].value[1-1]);
 		for (int s=2; s<=num_of_states; ++s)
 			fprintf(fp, " + %f x%d", pnew.value[s-1] - X[j].value[s-1], s);
 		fprintf(fp, " - x0 >= 0;\n");
 	}
+
+	// x0 is a free variable
+	fprintf(fp, "free x0;\n");
 
 	// Closing the file
 	fclose(fp);
@@ -638,67 +647,74 @@ double check_pnew(vector<ptree>& X, ptree& pnew, bstate& b) {
 
 	// getting the value of objective function
 	ssize_t read = getline(&line, &len, fp);
-	if (!strncmp(line, "This problem is infeasible", 26)) {
-		// cout << "pnew failure" << endl;
+	if (!strncmp(line, "This problem is", 15)) {
+		cout << "check pnew failure" << endl;
 		return -1; // Failure
 	}
 
 	if ((read = getline(&line, &len, fp)) != -1) {
 		line = trim(line, (int)read);
-		for (it=0; it; it++)
+		for (it=0; line[it]; it++) {
 			if (line[it] == ':')
 				break;
-		obj_value = line + it + 2;
+		}
+		obj_value = line + it + 1;
 		sscanf(obj_value, "%lf", &ret);
 	}
 
 	// getting the value of 'b'
 	read = getline(&line, &len, fp);
 	read = getline(&line, &len, fp);
+	read = getline(&line, &len, fp);
 	it = 0;
 	while ((read = getline(&line, &len, fp)) != -1) {
 		line = trim(line, (int)read);
-		for (it=0; it; it++)
+		for (it=0; line[it]; it++)
 			if (line[it] == ':')
 				break;
-		obj_value = line + it + 2;
+		obj_value = line + it + 1;
 		sscanf(obj_value, "%lf", &b.b[it++]);
 	}
 	fclose(fp);
-	// cout << ret << " pnew" << endl;
-	// exit(0);
+	exit(0);
 	return ret;
 }
 
 bool findb(int a, int t, vector<ptree>& Q, bstate& b) {
 	vector <double> _alpha;
-	// cout << "entering findb" << endl;
+	cout << "\nentering findb with action " << inv_action_map[a] << " and TH " << t << endl;
 	for (int i=0; i<sz(Q); ++i) {
 		for (int o=0; o<num_of_observations; ++o) {
 			for (int j=0; j<sz(V[t-1]); ++j) {
 				ptree pnew = Q[i];
 				
 				// Altering one of the subtrees of Q[i] to make pnew
-				pnew.choice[o] = j;
+				if (pnew.choice[o] == j)
+					continue;
+				else
+					pnew.choice[o] = j;
 
 				// Updating the value vector of pnew
 				pnew.value.assign(num_of_states, 0);
 				for (int s=0; s<num_of_states; ++s) {
-					if (R[s][pnew.action]) pnew.value[s] += R[s][a];
+					if (R[s][a]) pnew.value[s] += R[s][a];
 					for (int ob=0; ob<num_of_observations; ++ob) {
-						back(V[t-1][pnew.choice[ob]].value, pnew.action, ob, _alpha);
+						back(V[t-1][pnew.choice[ob]].value, a, ob, _alpha);
 						pnew.value[s] += discount * _alpha[s];
 					}
 				}
+
+				// Checking if pnew is an improvement over Qa
 				double delta = check_pnew(Q, pnew, b);
-				if (delta > almost_zero) {
-					// cout << delta << " findb returning true" << endl;
+				cout << delta << endl;
+				if (delta > 0) {
+					cout << "findb returning true" << endl;
 					return true;
 				}
 			}
 		}
 	}
-	// cout << "findb returning false" << endl;
+	cout << "findb returning false" << endl;
 	return false;
 }
 
@@ -713,6 +729,9 @@ void witness(int t, int a, vector<ptree>& Q) {
 		cout << "has_witness" << endl;
 		p = besttree(b, a, V[t-1]);
 		Q.push_back(p);
+		cout << "\ncurrent set of policy trees:\n";
+		for (int i=0; i<sz(Q); ++i)
+			// print_tree(Q[i]);
 		has_witness = findb(a, t, Q, b);
 	}
 }
@@ -730,6 +749,6 @@ void solvePOMDP() {
 			X.insert(X.end(), Q.begin(), Q.end());
 		}
 		prune(time_horizon, X);
-		cout << "Time Horizon: " << time_horizon << "  Size of Value Function: " << sz(V[time_horizon]) << endl;
+		cout << "\nTime Horizon: " << time_horizon << "  Size of Value Function: " << sz(V[time_horizon]) << endl;
 	} while ( (time_horizon < TIME_HORIZON) && !(difference(V[time_horizon-1], V[time_horizon]) <= 0) );
 }
