@@ -319,12 +319,9 @@ int main(int argc, char* argv[]) {
 	// Removing the intermediate auxilary files
 	system("rm model.lp out.lp");
 
-	// Printing the best action after taking the observation as input
 	cout << "\n----------------------------------------------------\nPOMDP Solved" << endl;
-	// for (int i=0; i<sz(V[TIME_HORIZON]); ++i)
-		// print_tree(V[TIME_HORIZON][i]);
+	// Printing the best action after taking the observation as input
 	while (1) {
-
 		// Finding best action for current belief state
 		int best_action = -1;
 		double bestval = -INF;
@@ -334,7 +331,7 @@ int main(int argc, char* argv[]) {
 				best_action = V[time_horizon][i].action;
 			}
 		}
-		cout << "\ncurrent belief state:\n";
+		cout << "\ncurrent belief state: ";
 		for (int s=0; s<num_of_states; ++s)
 			cout << cur_b.b[s] << " ";
 		cout << "\nbest_action: " << inv_action_map[best_action] << endl;
@@ -343,6 +340,17 @@ int main(int argc, char* argv[]) {
 		cout << "Observation: ";
 		string obs;
 		cin >> obs;
+		bool f = 0;
+		for (auto it: obs_map) {
+			if (it.first == obs) {
+				f = 1;
+				break;
+			}
+		}
+		if (!f) {
+			cout << "ERROR: no such observation" << endl;
+			continue;
+		}
 		int o = obs_map[obs];
 		assert(o >= 0 && o < num_of_observations);
 
@@ -359,9 +367,7 @@ int main(int argc, char* argv[]) {
 			bestval += next_b.b[i];
 		}
 		for (int i=0; i<num_of_states; ++i)
-			cur_b.b[i] = next_b.b[i] / bestval;
-		
-		// time_horizon--;
+			cur_b.b[i] = next_b.b[i] / bestval;			
 	}
 	exit(EXIT_SUCCESS);
 }
