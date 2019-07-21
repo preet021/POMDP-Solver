@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <ctype.h>
 #include <iostream>
 #include <fstream>
 #include <stdlib.h>
@@ -18,10 +19,10 @@ using namespace std;
 #include "witness.h"
 
 const double INF = 1e18;
-const int TIME_HORIZON = 2;
+const int TIME_HORIZON = 3;
 bool has_discount = false, has_states = false, has_actions = false, has_observations = false, has_start = false;
 double **R, ***T, ***O;
-double discount, almost_zero = 1e-6;
+double discount, almost_zero = 1e-5;
 int num_of_states = 0, num_of_actions = 0, num_of_observations = 0, time_horizon = 0;
 map <string, int> state_map, action_map, obs_map;
 map <int, string> inv_state_map, inv_action_map, inv_obs_map;
@@ -32,7 +33,7 @@ queue <oe> Q_O;
 oe obs;
 te trns;
 re rew;
-bstate cur_b;
+bstate cur_b, next_b;
 
 // Function declarations
 void store_reward_func();
@@ -316,22 +317,52 @@ int main(int argc, char* argv[]) {
 	solvePOMDP();
 
 	// Removing the intermediate auxilary files
-	// system("rm model.lp out.lp");
+	system("rm model.lp out.lp");
 
 	// Printing the best action after taking the observation as input
-	cout << "\nPOMDP Solved" << endl;
-	for (int i=0; i<sz(V[TIME_HORIZON]); ++i) {
-		print_tree(V[TIME_HORIZON][i]);
-	}
-	int best_action = -1;
-	double bestval = -INF;
-	for (int i=0; i<sz(V[TIME_HORIZON]); ++i) {
-		if (dot_product(cur_b.b, V[TIME_HORIZON][i].value) > bestval) {
-			bestval = dot_product(cur_b.b, V[TIME_HORIZON][i].value);
-			best_action = V[TIME_HORIZON][i].action;
+	cout << "\n----------------------------------------------------\nPOMDP Solved" << endl;
+	// for (int i=0; i<sz(V[TIME_HORIZON]); ++i)
+		// print_tree(V[TIME_HORIZON][i]);
+	while (1) {
+
+		// Finding best action for current belief state
+		int best_action = -1;
+		double bestval = -INF;
+		for (int i=0; i<sz(V[time_horizon]); ++i) {
+			if (dot_product(cur_b.b, V[time_horizon][i].value) > bestval) {
+				bestval = dot_product(cur_b.b, V[time_horizon][i].value);
+				best_action = V[time_horizon][i].action;
+			}
 		}
+		cout << "\ncurrent belief state:\n";
+		for (int s=0; s<num_of_states; ++s)
+			cout << cur_b.b[s] << " ";
+		cout << "\nbest_action: " << inv_action_map[best_action] << endl;
+
+		// Getting the evidence
+		cout << "Observation: ";
+		string obs;
+		cin >> obs;
+		int o = obs_map[obs];
+		assert(o >= 0 && o < num_of_observations);
+
+		// Computing the next belief state
+		next_b.b.assign(num_of_states, 0);
+		bestval = 0;
+		for (int i=0; i<num_of_states; ++i) {
+			if (O[best_action][i][o]) {
+				for (int s=0; s<num_of_states; ++s)
+					if (T[s][best_action][i])
+						next_b.b[i] += T[s][best_action][i] * cur_b.b[s];
+				next_b.b[i] *= O[best_action][i][o];
+			}
+			bestval += next_b.b[i];
+		}
+		for (int i=0; i<num_of_states; ++i)
+			cur_b.b[i] = next_b.b[i] / bestval;
+		
+		// time_horizon--;
 	}
-	cout << "\nbest_action: " << inv_action_map[best_action] << endl;
 	exit(EXIT_SUCCESS);
 }
 
@@ -462,9 +493,9 @@ void back(vector <double>& alpha, int a, int o, vector<double>& _alpha) {
 ptree besttree(bstate& b, int a, vector<ptree>& X) {
 	ptree p;
 	p.action = a;
-	// cout << "besttree" << endl;
+	// cout << "\nbesttree" << endl;
 	// for (int i=0; i<num_of_states; ++i)
-		// cout << b.b[i] << " ";
+	// 	cout << b.b[i] << " ";
 	// cout << endl;
 	p.value.assign(num_of_states, 0);
 	for (int s=0; s<num_of_states; ++s)
@@ -498,6 +529,7 @@ ptree besttree(bstate& b, int a, vector<ptree>& X) {
 		}
 	}
 	// print_tree(p);
+	// cout << "besttree returning" << endl;
 	return p;
 }
 
@@ -605,6 +637,7 @@ void prune(int t, vector<ptree>& X) {
 }
 
 double check_pnew(vector<ptree>& X, ptree& pnew, bstate& b) {
+	// cout << "\nentered check pnew sz " << sz(X) << endl;
 	// print_tree(pnew);
 	FILE *fp = fopen("model.lp", "w");
 	fprintf(fp, "max: 1 x0;\n\n");
@@ -668,7 +701,7 @@ double check_pnew(vector<ptree>& X, ptree& pnew, bstate& b) {
 	while ((read = getline(&line, &len, fp)) != -1) {
 		line = trim(line, (int)read);
 		for (int itr=0; line[itr]; itr++)
-			if (line[itr] == ':') {
+			if (isspace(line[itr])) {
 				obj_value = line + itr + 1;
 				break;
 			}
@@ -680,12 +713,13 @@ double check_pnew(vector<ptree>& X, ptree& pnew, bstate& b) {
 
 bool findb(int a, int t, vector<ptree>& Q, bstate& b) {
 	vector <double> _alpha;
+	bool ret = false;
 	// cout << "\nentering findb with action " << inv_action_map[a] << " and TH " << t << endl;
-	for (int i=0; i<sz(Q); ++i) {
+	for (int i=0; !ret && i<sz(Q); ++i) {
 		
-		for (int o=0; o<num_of_observations; ++o) {
+		for (int o=0; !ret && o<num_of_observations; ++o) {
 			
-			for (int j=0; j<sz(V[t-1]); ++j) {
+			for (int j=0; !ret && j<sz(V[t-1]); ++j) {
 				
 				ptree pnew = Q[i];
 				
@@ -707,19 +741,18 @@ bool findb(int a, int t, vector<ptree>& Q, bstate& b) {
 
 				// Checking if pnew is an improvement over Qa
 				double delta = check_pnew(Q, pnew, b);
-				// cout << delta << endl;
-				if (delta > 0) {
-					// cout << "improvement for bstate: ";
-					// for (int i=0; i<num_of_states; ++i)
-					// 	cout << b.b[i] << " ";
-					// cout << "\nfindb returning true" << endl;
-					return true;
+				if (delta > almost_zero) {
+					// cout << "\ncheck_pnew returned " << delta << endl;
+					// cout << "\nimprovement for bstate: ";
+					// for (int s=0; s<num_of_states; ++s)
+						// cout << b.b[s] << " "; cout << endl;
+					ret = true;
 				}
 			}
 		}
 	}
-	// cout << "findb returning false" << endl;
-	return false;
+	// cout << "\nfindb returning " << ret << endl;
+	return ret;
 }
 
 void witness(int t, int a, vector<ptree>& Q) {
@@ -730,13 +763,15 @@ void witness(int t, int a, vector<ptree>& Q) {
 	bool has_witness = findb(a, t, Q, b);
 	ptree p;
 	while (has_witness) {
-		// cout << "has_witness" << endl;
+		// cout << "has_witness " << t << endl;
 		p = besttree(b, a, V[t-1]);
 		Q.push_back(p);
+		// cout << sz(Q) << endl;
 		// cout << "\ncurrent set of policy trees:\n";
-		for (int i=0; i<sz(Q); ++i)
-			// print_tree(Q[i]);
+		// for (int i=0; i<sz(Q); ++i)
+		// 	print_tree(Q[i]);
 		has_witness = findb(a, t, Q, b);
+		// cout << "findb has returned " << has_witness << endl;
 	}
 }
 
@@ -752,8 +787,8 @@ void solvePOMDP() {
 			witness(time_horizon, a, Q);
 			X.insert(X.end(), Q.begin(), Q.end());
 		}
-		V[time_horizon].insert(V[time_horizon].end(), X.begin(), X.end());
-		// prune(time_horizon, X);
+		// V[time_horizon].insert(V[time_horizon].end(), X.begin(), X.end());
+		prune(time_horizon, X);
 		cout << "\nTime Horizon: " << time_horizon << "  Size of Value Function: " << sz(V[time_horizon]) << endl;
 	} while ( (time_horizon < TIME_HORIZON) && !(difference(V[time_horizon-1], V[time_horizon]) <= 0) );
 }
