@@ -19,7 +19,7 @@ using namespace std;
 #include "witness.h"
 
 const double INF = 1e18;
-const int TIME_HORIZON = 3;
+const int TIME_HORIZON = 4;
 bool has_discount = false, has_states = false, has_actions = false, has_observations = false, has_start = false;
 double **R, ***T, ***O;
 double discount, almost_zero = 1e-5;

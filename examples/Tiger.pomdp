@@ -43,4 +43,3 @@ R:open-left : tiger-left : * : * -100
 R:open-left : tiger-right : * : * 10		
 R:open-right : tiger-left : * : * 10
 R:open-right : tiger-right : * : * -100
-			
