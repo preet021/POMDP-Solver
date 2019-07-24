@@ -22,7 +22,7 @@ const double INF = 1e18;
 const int TIME_HORIZON = 4;
 bool has_discount = false, has_states = false, has_actions = false, has_observations = false, has_start = false;
 double **R, ***T, ***O;
-double discount, almost_zero = 1e-5;
+double discount, almost_zero = 1e-3;
 int num_of_states = 0, num_of_actions = 0, num_of_observations = 0, time_horizon = 0;
 map <string, int> state_map, action_map, obs_map;
 map <int, string> inv_state_map, inv_action_map, inv_obs_map;
@@ -282,7 +282,7 @@ int main(int argc, char* argv[]) {
     	fprintf(stderr, "ERROR: set of observations missing in input file %s\n", argv[1]);
     	exit(EXIT_FAILURE);
     }
-
+    
     // Creating the inverese state, action and obs map
     for (auto it: state_map) {
     	inv_state_map[it.second] = it.first; 
@@ -294,15 +294,6 @@ int main(int argc, char* argv[]) {
     	inv_obs_map[it.second] = it.first;
     }
     
-    // Storing the Reward function   R(s, a)
-    store_reward_func();
-
-    // Storing the Transition function   T(s, a, s')
-    store_transition_func();
-
-    // Storing the Observation function   O(a, s', o)
-    store_obs_func();
-
     // Printing the input POMDP
 	cout << "Number of States: " << num_of_states << '\n';
 	cout << "Number of Actions: " << num_of_actions << '\n';
@@ -312,6 +303,15 @@ int main(int argc, char* argv[]) {
 	for (int i=0; i<num_of_states; ++i)
 		cout << cur_b.b[i] << " ";
 	cout << "\n\n";
+
+    // Storing the Reward function   R(s, a)
+    store_reward_func();
+
+    // Storing the Observation function   O(a, s', o)
+    store_obs_func();
+
+    // Storing the Transition function   T(s, a, s')
+    store_transition_func();
 
 	// Calling the solver
 	solvePOMDP();
@@ -373,6 +373,7 @@ int main(int argc, char* argv[]) {
 }
 
 void store_reward_func() {
+	map <int, int> M;
 	R = new double*[num_of_states];
     re tp, rew;
     while (!Q_R.empty()) {
@@ -393,7 +394,8 @@ void store_reward_func() {
     		}
     	}
     	else {
-    		if (R[tp.state] == NULL) {
+    		if (!M[tp.state]) {
+    			M[tp.state] = 1;
     			R[tp.state] = new double[num_of_actions];
     			memset(R[tp.state], 0, sizeof(R[tp.state]));
     		}
@@ -403,6 +405,7 @@ void store_reward_func() {
 }
 
 void store_transition_func() {
+	map < pair<int,int>, int> M;
 	T = new double**[num_of_states];
     for (int i=0; i<num_of_states; ++i)
     	T[i] = new double*[num_of_actions];
@@ -432,7 +435,8 @@ void store_transition_func() {
     		}
     	}
     	else {
-    		if (T[tp.start_state][tp.action] == NULL) {
+    		if (!M[make_pair(tp.start_state, tp.action)]) {
+    			M[make_pair(tp.start_state, tp.action)] = 1;
     			T[tp.start_state][tp.action] = new double[num_of_states];
     			memset(T[tp.start_state][tp.action], 0, sizeof(T[tp.start_state][tp.action]));
     		}
@@ -442,6 +446,7 @@ void store_transition_func() {
 }
 
 void store_obs_func() {
+	map < pair<int,int>, int> M;
 	O = new double**[num_of_actions];
     for (int i=0; i<num_of_actions; ++i)
     	O[i] = new double*[num_of_states];
@@ -471,7 +476,8 @@ void store_obs_func() {
     		}
     	}
     	else {
-    		if (O[tp.action][tp.end_state] == NULL) {
+    		if (!M[make_pair(tp.action, tp.end_state)]) {
+    			M[make_pair(tp.action, tp.end_state)] = 1;
     			O[tp.action][tp.end_state] = new double[num_of_observations];
     			memset(O[tp.action][tp.end_state], 0, sizeof(O[tp.action][tp.end_state]));
     		}
@@ -643,7 +649,7 @@ void prune(int t, vector<ptree>& X) {
 }
 
 double check_pnew(vector<ptree>& X, ptree& pnew, bstate& b) {
-	// cout << "\nentered check pnew sz " << sz(X) << endl;
+	cout << "\nentered check pnew sz " << sz(X) << endl;
 	// print_tree(pnew);
 	FILE *fp = fopen("model.lp", "w");
 	fprintf(fp, "max: 1 x0;\n\n");
@@ -747,11 +753,11 @@ bool findb(int a, int t, vector<ptree>& Q, bstate& b) {
 
 				// Checking if pnew is an improvement over Qa
 				double delta = check_pnew(Q, pnew, b);
+				cout << "\ncheck_pnew returned " << delta << endl;
 				if (delta > almost_zero) {
-					// cout << "\ncheck_pnew returned " << delta << endl;
-					// cout << "\nimprovement for bstate: ";
-					// for (int s=0; s<num_of_states; ++s)
-						// cout << b.b[s] << " "; cout << endl;
+					cout << "\nimprovement for bstate: ";
+					for (int s=0; s<num_of_states; ++s)
+						cout << b.b[s] << " "; cout << endl;
 					ret = true;
 				}
 			}
@@ -793,7 +799,6 @@ void solvePOMDP() {
 			witness(time_horizon, a, Q);
 			X.insert(X.end(), Q.begin(), Q.end());
 		}
-		// V[time_horizon].insert(V[time_horizon].end(), X.begin(), X.end());
 		prune(time_horizon, X);
 		cout << "\nTime Horizon: " << time_horizon << "  Size of Value Function: " << sz(V[time_horizon]) << endl;
 	} while ( (time_horizon < TIME_HORIZON) && !(difference(V[time_horizon-1], V[time_horizon]) <= 0) );
