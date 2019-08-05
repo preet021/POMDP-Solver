@@ -320,6 +320,17 @@ int main(int argc, char* argv[]) {
 	system("rm model.lp out.lp");
 
 	cout << "\n----------------------------------------------------\nPOMDP Solved" << endl;
+
+	// getting the zmdp policy
+	char cmd[] = "../test/zmdp-master/bin/linux4/zmdp solve ";
+	system(strcat(cmd, argv[1]));
+	char policy[] = "../test/zmdp-master/results/out.policy";
+	get_zmdp_policy(policy);
+	cout << zV.size() << endl;
+	for (int i=0; i<sz(zV); ++i) {
+		print_tree(zV[i]);
+	}
+
 	// Printing the best action after taking the observation as input
 	while (1) {
 		// Finding best action for current belief state
@@ -549,7 +560,7 @@ void print_tree(ptree& p) {
 	cout << "\nAction: " << inv_action_map[p.action] << "\nValue: ";
 	for (int s=0; s<num_of_states; ++s)
 		cout << p.value[s] << " ";
-	if (time_horizon > 1) {
+	if (sz(p.choice)) {
 		cout << "\nChoice: ";
 		for (int o=0; o<num_of_observations; ++o)
 			cout << inv_action_map[V[time_horizon-1][p.choice[o]].action] << " ";

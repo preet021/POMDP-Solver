@@ -34,5 +34,11 @@
 
 	char* trim(char *s, int len);
 	double dot_product(vector<double>& a, vector<double>& b);
+	int get_zmdp_policy (char* policy);
+	extern vector <struct Policy_Tree> zV;
+	extern int num_of_states;
+	extern int num_of_actions;
+	extern int num_of_observations;
+	extern int num_of_zmdp_policy_trees;
 
 #endif
