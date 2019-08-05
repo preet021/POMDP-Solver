@@ -1,0 +1,15 @@
+#!/usr/bin/perl
+
+$TEST_DESCRIPTION = "default use of zmdp solve/evaluate on a pomdp";
+require "testLibrary.perl";
+
+&testZmdpSolve(cmd => "$zmdpSolve $pomdpsDir/three_state.pomdp",
+	       expectedLB => 20.8260,
+	       expectedUB => 20.8269,
+	       testTolerance => 0.01,
+	       outFiles => ["out.policy"]);
+&testZmdpEvaluate(cmd => "$zmdpEvaluate $pomdpsDir/three_state.pomdp",
+		  expectedMean => 20.826,
+		  testTolerance => 1.0,
+		  outFiles => ["scores.plot", "sim.plot"]);
+

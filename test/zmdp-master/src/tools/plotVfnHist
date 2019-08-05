@@ -1,0 +1,203 @@
+#!/usr/bin/perl
+
+# run this script in the same directory where you run makeVfnHist; it generates the plots
+
+$LBWIDTH = 30;
+$UBWIDTH = 3;
+
+sub dosys {
+    my $cmd = shift;
+    print "$cmd\n";
+    my $ret = system($cmd);
+    if (0 != $ret) {
+	die "ERROR: '$cmd' returned exit status $ret\n";
+    }
+    return $ret;
+}
+
+sub usage {
+    die "usage: plotVfnHist OPTIONS\n".
+	"  -h or --help   Print this help.\n".
+	"  --ps or --pdf  Produce output file instead of displaying plot\n";
+}
+
+$OUTPUT_MODE = "x11";
+for (@ARGV) {
+    if ($_ eq "-h" or $_ eq "--help") {
+	&usage();
+    } elsif ($_ eq "--ps") {
+	$OUTPUT_MODE = "ps";
+    } elsif ($_ eq "--pdf") {
+	$OUTPUT_MODE = "pdf";
+    } else {
+	die "ERROR: unknown option $_ (-h for help)\n";
+    }
+}
+
+sub getNumBackups {
+    my $file = shift;
+    $lastLine = `tail -1 $file`;
+    chop $lastLine;
+    @fields = split(/\s+/, $lastLine);
+    return $fields[6];
+}
+
+&dosys("rm -rf plotscratch");
+&dosys("mkdir -p plotscratch");
+&dosys("grep -v \\# gtruth/backups.log > plotscratch/backups.log");
+&dosys("head -1000 plotscratch/backups.log > plotscratch/k1.log");
+&dosys("sort -n plotscratch/k1.log | tail -1 > plotscratch/k1Last.log");
+&dosys("head -2000 plotscratch/backups.log | tail -1000 > plotscratch/k2.log");
+&dosys("sort -n plotscratch/k2.log | tail -1 > plotscratch/k2Last.log");
+
+$k1Last = `cat plotscratch/k1Last.log`;
+chop $k1Last;
+$k1Size = $k1Last+1;
+$k2Last = `cat plotscratch/k2Last.log`;
+chop $k2Last;
+$k2Size = $k2Last+1;
+
+for ("ltab", "lcomp", "lmask", "lcompprune", "lmaskprune", "utab", "ucomp", "umask") {
+    eval("\$${_}B = &getNumBackups('$_/bounds.plot');");
+}
+
+$octOpts = "--silent ";
+if ($OUTPUT_MODE ne "x11") {
+    $outputPlot =<<"EOF";
+#############################
+__gnuplot_set__ terminal postscript enhanced "Times" 12
+__gnuplot_set__ output "vfnHist.ps"
+#############################
+EOF
+} else {
+    $outputPlot = "";
+}
+
+$octScript =<<"EOF";
+#############################
+function cdfs = calcCdfs(gtruth, vals, entries, bins, invert);
+  numLines = size(vals,2);
+  numBins = size(bins,2);
+  cdfs = zeros(numBins,numLines);
+  for i=1:numLines
+    [diffHist,foo] = hist(vals(entries,i) - gtruth(entries), bins, 1);
+    if invert
+      tmp = [0, diffHist(1:(numBins-1))];
+      cdfs(:,i) = max(0, 1 - cumsum(tmp)');
+    else
+      cdfs(:,i) = cumsum(diffHist)';
+    end
+  end
+end
+
+numBins = 20;
+
+gtruth = load("gtruth/boundValues.log");
+lcomp = load("lcomp/boundValues.log");
+lcompprune = load("lcompprune/boundValues.log");
+#lcomp = gtruth; # HACK
+#lcompprune = gtruth; # HACK
+lmask = load("lmask/boundValues.log");
+lmaskprune = load("lmaskprune/boundValues.log");
+ucomp = load("ucomp/boundValues.log");
+umask = load("umask/boundValues.log");
+ltab = load("ltab/boundValues.log");
+utab = load("utab/boundValues.log");
+
+lbgtruth = gtruth(:,2);
+lball = [lcomp(:,2), lcompprune(:,2), lmask(:,2), lmaskprune(:,2), ltab(:,2)];
+LCOMP = 1;
+LCOMPPRUNE = 2;
+LMASK = 3;
+LMASKPRUNE = 4;
+LTAB = 5;
+
+ubgtruth = gtruth(:,3);
+uball = [ucomp(:,3), umask(:,3), utab(:,3)];
+UCOMP = 1;
+UMASK = 2;
+UTAB = 3;
+
+setA = 1:$k1Size;
+setB = ($k1Size+1):$k2Size;
+$outputPlot
+
+__gnuplot_set__ key left
+
+bds = [-$LBWIDTH,0];
+delta = (range(bds))/numBins;
+bins = (bds(1):delta:bds(2));
+
+subplot(2,2,1);
+cdfs = calcCdfs(lbgtruth, lball, setA, bins, 0);
+plot(
+     bins,cdfs(:,LCOMP),'-+;comp ($lcompB);',
+     bins,cdfs(:,LCOMPPRUNE),'-*;comp/prune ($lcomppruneB);',
+     bins,cdfs(:,LMASK),'--o;mask ($lmaskB);',
+     bins,cdfs(:,LMASKPRUNE),'--x;mask/prune ($lmaskpruneB);',
+     bins,cdfs(:,LTAB),';tab+comp ($ltabB);');
+title('Lower Bound, Distribution A');
+
+__gnuplot_set__ key left
+
+subplot(2,2,3);
+cdfs = calcCdfs(lbgtruth, lball, setB, bins, 0);
+plot(
+     bins,cdfs(:,LCOMP),'-+;comp ($lcompB);',
+     bins,cdfs(:,LCOMPPRUNE),'-*;comp/prune ($lcomppruneB);',
+     bins,cdfs(:,LMASK),'-o;mask ($lmaskB);',
+     bins,cdfs(:,LMASKPRUNE),'-x;mask/prune ($lmaskpruneB);',
+     bins,cdfs(:,LTAB),';tab+comp ($ltabB);');
+title('Lower Bound, Distribution B');
+
+bds = [0,$UBWIDTH];
+delta = (range(bds))/numBins;
+bins = (bds(1):delta:bds(2));
+
+__gnuplot_set__ key right
+
+subplot(2,2,2);
+cdfs = calcCdfs(ubgtruth, uball, setA, bins, 1);
+plot(bins,cdfs(:,UCOMP),'-+;comp ($ucompB);',
+     bins,cdfs(:,UMASK),'--o;mask ($umaskB);',	
+     bins,cdfs(:,UTAB),';tab+comp ($utabB);');
+title('Upper Bound, Distribution A');
+
+__gnuplot_set__ right
+
+subplot(2,2,4);
+cdfs = calcCdfs(ubgtruth, uball, setB, bins, 1);
+plot(bins,cdfs(:,UCOMP),'-+;comp ($ucompB);',
+     bins,cdfs(:,UMASK),'--o;mask ($umaskB);',
+     bins,cdfs(:,UTAB),';tab+comp ($utabB);');
+title('Upper Bound, Distribution B');
+
+#############################
+EOF
+
+print "octave $octOpts <<\n$octScript";
+open(OCT, "|octave $octOpts") or die "ERROR: couldn't run octave\n";
+select(OCT);
+$| = 1;
+select(STDOUT);
+print OCT $octScript;
+
+$tmpScript = "plotVfn.m";
+open(SCR,">$tmpScript") or
+    die "ERROR: couldn't open $tmpScript for writing: $!\n";
+print SCR $octScript;
+close(SCR);
+print "[octave script also output to $tmpScript]\n";
+
+if ($OUTPUT_MODE ne "x11") {
+    close(OCT);
+    if ($OUTPUT_MODE eq "pdf") {
+	&dosys("ps2pdf vfnHist.ps");
+	&dosys("rm -f vfnHist.ps");
+	print "output written to vfnHist.pdf\n";
+    } else {
+	print "output written to vfnHist.ps\n";
+    }
+} else {
+    sleep(10000);
+}

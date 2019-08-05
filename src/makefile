@@ -4,7 +4,7 @@ witness: main.o trim.o dot_product.o
 	$(CC) -o witness $^
 
 clean:
-	@rm -f *.o witness *.lp
+	@rm -f *.o witness *.lp *.out
 
 main.o: witness.h main.cpp
 	$(CC) -g -c main.cpp
