@@ -3,7 +3,7 @@ import sys
 
 states, actions, observations = map(int, input().strip().split())
 
-discount = random.randint(75, 95) / 100
+discount = random.randint(10, 95) / 100
 
 f = open("../examples/" + sys.argv[1], "w+")
 

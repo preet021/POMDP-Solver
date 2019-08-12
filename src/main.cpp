@@ -19,7 +19,7 @@ using namespace std;
 #include "witness.h"
 
 const double INF = 1e18;
-const int TIME_HORIZON = 4;
+const int TIME_HORIZON = 5;
 bool has_discount = false, has_states = false, has_actions = false, has_observations = false, has_start = false;
 double **R, ***T, ***O;
 double discount, almost_zero = 1e-3;
@@ -324,28 +324,38 @@ int main(int argc, char* argv[]) {
 	// getting the zmdp policy
 	char cmd[] = "../test/zmdp-master/bin/linux4/zmdp solve ";
 	system(strcat(cmd, argv[1]));
-	char policy[] = "../test/zmdp-master/results/out.policy";
+	char policy[] = "./out.policy";
 	get_zmdp_policy(policy);
-	cout << zV.size() << endl;
 	for (int i=0; i<sz(zV); ++i) {
 		print_tree(zV[i]);
 	}
 
+	cout << "\nmy policy trees:\n";
+	for (int i=0; i<sz(V[time_horizon]); ++i)
+		print_tree(V[time_horizon][i]);
 	// Printing the best action after taking the observation as input
 	while (1) {
 		// Finding best action for current belief state
-		int best_action = -1;
+		int my_best_action = -1, zmdp_best_action = -1;
 		double bestval = -INF;
 		for (int i=0; i<sz(V[time_horizon]); ++i) {
 			if (dot_product(cur_b.b, V[time_horizon][i].value) > bestval) {
 				bestval = dot_product(cur_b.b, V[time_horizon][i].value);
-				best_action = V[time_horizon][i].action;
+				my_best_action = V[time_horizon][i].action;
+			}
+		}
+		bestval = -INF;
+		for (int i=0; i<sz(zV); ++i) {
+			if (dot_product(cur_b.b, zV[i].value) > bestval) {
+				bestval = dot_product(cur_b.b, zV[i].value);
+				zmdp_best_action = zV[i].action;
 			}
 		}
 		cout << "\ncurrent belief state: ";
 		for (int s=0; s<num_of_states; ++s)
 			cout << cur_b.b[s] << " ";
-		cout << "\nbest_action: " << inv_action_map[best_action] << endl;
+		cout << "\nmy_best_action: " << inv_action_map[my_best_action];
+		cout << "\tzmdp_best_action: " << inv_action_map[zmdp_best_action] << endl;
 
 		// Getting the evidence
 		cout << "Observation: ";
@@ -369,11 +379,11 @@ int main(int argc, char* argv[]) {
 		next_b.b.assign(num_of_states, 0);
 		bestval = 0;
 		for (int i=0; i<num_of_states; ++i) {
-			if (O[best_action][i][o]) {
+			if (O[my_best_action][i][o]) {
 				for (int s=0; s<num_of_states; ++s)
-					if (T[s][best_action][i])
-						next_b.b[i] += T[s][best_action][i] * cur_b.b[s];
-				next_b.b[i] *= O[best_action][i][o];
+					if (T[s][my_best_action][i])
+						next_b.b[i] += T[s][my_best_action][i] * cur_b.b[s];
+				next_b.b[i] *= O[my_best_action][i][o];
 			}
 			bestval += next_b.b[i];
 		}
@@ -660,7 +670,7 @@ void prune(int t, vector<ptree>& X) {
 }
 
 double check_pnew(vector<ptree>& X, ptree& pnew, bstate& b) {
-	cout << "\nentered check pnew sz " << sz(X) << endl;
+	// cout << "\nentered check pnew sz " << sz(X) << endl;
 	// print_tree(pnew);
 	FILE *fp = fopen("model.lp", "w");
 	fprintf(fp, "max: 1 x0;\n\n");
@@ -764,11 +774,11 @@ bool findb(int a, int t, vector<ptree>& Q, bstate& b) {
 
 				// Checking if pnew is an improvement over Qa
 				double delta = check_pnew(Q, pnew, b);
-				cout << "\ncheck_pnew returned " << delta << endl;
+				// cout << "\ncheck_pnew returned " << delta << endl;
 				if (delta > almost_zero) {
-					cout << "\nimprovement for bstate: ";
-					for (int s=0; s<num_of_states; ++s)
-						cout << b.b[s] << " "; cout << endl;
+					// cout << "\nimprovement for bstate: ";
+					// for (int s=0; s<num_of_states; ++s)
+					// 	cout << b.b[s] << " "; cout << endl;
 					ret = true;
 				}
 			}
@@ -811,6 +821,6 @@ void solvePOMDP() {
 			X.insert(X.end(), Q.begin(), Q.end());
 		}
 		prune(time_horizon, X);
-		cout << "\nTime Horizon: " << time_horizon << "  Size of Value Function: " << sz(V[time_horizon]) << endl;
+		cout << "Time Horizon: " << time_horizon << "  Size of Value Function: " << sz(V[time_horizon]) << endl;
 	} while ( (time_horizon < TIME_HORIZON) && !(difference(V[time_horizon-1], V[time_horizon]) <= 0) );
 }

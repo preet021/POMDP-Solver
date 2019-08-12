@@ -24,14 +24,14 @@ int get_zmdp_policy (char* policy) {
 	}
 
 	// Opening file
-	cout << "Opening file..." << endl;
+	cout << "Opening zmdp policy file..." << endl;
 	FILE *fp = fopen(policy, "r");
 	if (!fp) {
 		fprintf(stderr, "ERROR: unable to open file %s\n", policy);
 		exit(EXIT_FAILURE);
 	}
 	
-	cout << "Reading file..." << endl;
+	cout << "Reading..." << endl;
 	size_t len = 0;
 	char *line = NULL;
 	ssize_t read;
@@ -86,5 +86,5 @@ int get_zmdp_policy (char* policy) {
 		read = getline(&line, &len, fp);
 	}
 	fclose(fp);
-	cout << "File read." << endl;
+	cout << "File read with following " << num_of_zmdp_policy_trees << " policy trees." << endl;
 }
