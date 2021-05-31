@@ -306,12 +306,15 @@ int main(int argc, char* argv[]) {
 
     // Storing the Reward function   R(s, a)
     store_reward_func();
+    cout << "Reward function stored" << endl;
 
     // Storing the Observation function   O(a, s', o)
     store_obs_func();
+    cout << "Observation function stored" << endl;
 
     // Storing the Transition function   T(s, a, s')
     store_transition_func();
+    cout << "Transition function stored" << endl;
 
 	// Calling the solver
 	solvePOMDP();
@@ -330,10 +333,15 @@ int main(int argc, char* argv[]) {
 		print_tree(zV[i]);
 	}
 
+	bstate cur_b_zmdp;
+	cur_b_zmdp.b.insert(cur_b_zmdp.b.end(), cur_b.b.begin(), cur_b.b.end());
+
 	cout << "\nmy policy trees:\n";
 	for (int i=0; i<sz(V[time_horizon]); ++i)
 		print_tree(V[time_horizon][i]);
+
 	// Printing the best action after taking the observation as input
+	bool f1 = 0;
 	while (1) {
 		// Finding best action for current belief state
 		int my_best_action = -1, zmdp_best_action = -1;
@@ -346,14 +354,21 @@ int main(int argc, char* argv[]) {
 		}
 		bestval = -INF;
 		for (int i=0; i<sz(zV); ++i) {
-			if (dot_product(cur_b.b, zV[i].value) > bestval) {
-				bestval = dot_product(cur_b.b, zV[i].value);
+			if (dot_product(cur_b_zmdp.b, zV[i].value) > bestval) {
+				bestval = dot_product(cur_b_zmdp.b, zV[i].value);
 				zmdp_best_action = zV[i].action;
 			}
 		}
-		cout << "\ncurrent belief state: ";
+		cout << "\nmy current belief state: ";
 		for (int s=0; s<num_of_states; ++s)
 			cout << cur_b.b[s] << " ";
+		cout << "\nzmdp current belief state: ";
+		for (int s=0; s<num_of_states; ++s)
+			cout << cur_b_zmdp.b[s] << " ";
+		if (!f1) {
+			my_best_action = 0;
+			f1 = 1;
+		}
 		cout << "\nmy_best_action: " << inv_action_map[my_best_action];
 		cout << "\tzmdp_best_action: " << inv_action_map[zmdp_best_action] << endl;
 
@@ -375,9 +390,9 @@ int main(int argc, char* argv[]) {
 		int o = obs_map[obs];
 		assert(o >= 0 && o < num_of_observations);
 
-		// Computing the next belief state
+		// Computing the next belief state for this solver
 		next_b.b.assign(num_of_states, 0);
-		bestval = 0;
+		double total = 0;
 		for (int i=0; i<num_of_states; ++i) {
 			if (O[my_best_action][i][o]) {
 				for (int s=0; s<num_of_states; ++s)
@@ -385,10 +400,25 @@ int main(int argc, char* argv[]) {
 						next_b.b[i] += T[s][my_best_action][i] * cur_b.b[s];
 				next_b.b[i] *= O[my_best_action][i][o];
 			}
-			bestval += next_b.b[i];
+			total += next_b.b[i];
 		}
 		for (int i=0; i<num_of_states; ++i)
-			cur_b.b[i] = next_b.b[i] / bestval;			
+			cur_b.b[i] = next_b.b[i] / total;
+
+		// Computing the next belief state for zmdp solver
+		next_b.b.assign(num_of_states, 0);
+		total = 0;
+		for (int i=0; i<num_of_states; ++i) {
+			if (O[zmdp_best_action][i][o]) {
+				for (int s=0; s<num_of_states; ++s)
+					if (T[s][zmdp_best_action][i])
+						next_b.b[i] += T[s][zmdp_best_action][i] * cur_b_zmdp.b[s];
+				next_b.b[i] *= O[zmdp_best_action][i][o];
+			}
+			total += next_b.b[i];
+		}
+		for (int i=0; i<num_of_states; ++i)
+			cur_b_zmdp.b[i] = next_b.b[i] / total;
 	}
 	exit(EXIT_SUCCESS);
 }
@@ -416,6 +446,7 @@ void store_reward_func() {
     	}
     	else {
     		if (!M[tp.state]) {
+    			cout << tp.state << endl;
     			M[tp.state] = 1;
     			R[tp.state] = new double[num_of_actions];
     			memset(R[tp.state], 0, sizeof(R[tp.state]));
@@ -514,6 +545,7 @@ void back(vector <double>& alpha, int a, int o, vector<double>& _alpha) {
 		policy tree corresponding to alpha. It does not include the reward
 		of taking action a in s (i.e. R(s, a)).
 	*/
+	// cout << "entered back" << endl;
 	_alpha.clear();
 	_alpha.assign(num_of_states, 0);
 	for (int s=0; s<num_of_states; ++s)
@@ -521,6 +553,7 @@ void back(vector <double>& alpha, int a, int o, vector<double>& _alpha) {
 			if (O[a][_s][o] && T[s][a][_s]) {
 				_alpha[s] += alpha[_s] * T[s][a][_s] * O[a][_s][o];
 			}
+	// cout << "left back" << endl;
 }
 
 ptree besttree(bstate& b, int a, vector<ptree>& X) {
@@ -531,8 +564,9 @@ ptree besttree(bstate& b, int a, vector<ptree>& X) {
 	// 	cout << b.b[i] << " ";
 	// cout << endl;
 	p.value.assign(num_of_states, 0);
-	for (int s=0; s<num_of_states; ++s)
-		if (R[s][a]) p.value[s] += R[s][a];
+	for (int s=0; s<num_of_states; ++s) {
+		if (R[s] && R[s][a]) p.value[s] += R[s][a];
+	}
 
 	if (time_horizon > 1) {
 		// Finding the best t-1 step policy tree for each observation
@@ -765,7 +799,7 @@ bool findb(int a, int t, vector<ptree>& Q, bstate& b) {
 				// Updating the value vector of pnew
 				pnew.value.assign(num_of_states, 0);
 				for (int s=0; s<num_of_states; ++s) {
-					if (R[s][a]) pnew.value[s] += R[s][a];
+					if (R[s] && R[s][a]) pnew.value[s] += R[s][a];
 					for (int ob=0; ob<num_of_observations; ++ob) {
 						back(V[t-1][pnew.choice[ob]].value, a, ob, _alpha);
 						pnew.value[s] += discount * _alpha[s];
@@ -795,6 +829,7 @@ void witness(int t, int a, vector<ptree>& Q) {
 	Q.push_back(besttree(b, a, V[t-1]));
 	bool has_witness = findb(a, t, Q, b);
 	ptree p;
+
 	while (has_witness) {
 		// cout << "has_witness " << t << endl;
 		p = besttree(b, a, V[t-1]);
